@@ -1,6 +1,35 @@
 import { X } from "lucide-react"
+import { useEffect, useRef } from "react"
+import lottie from "lottie-web"
 
 export function EmptyState() {
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    // Load and render Lottie animation
+    const loadLottie = async () => {
+      if (!containerRef.current) return
+
+      try {
+        const assetUrl = chrome.runtime.getURL("assets/Ambient-Motion.json")
+        const response = await fetch(assetUrl)
+        const animationData = await response.json()
+
+        lottie.loadAnimation({
+          container: containerRef.current,
+          renderer: "svg",
+          loop: true,
+          autoplay: true,
+          animationData: animationData
+        })
+      } catch (error) {
+        console.error("Failed to load Lottie animation:", error)
+      }
+    }
+
+    loadLottie()
+  }, [])
+
   const handleClose = () => {
     // Send message to content scripts before closing
     console.log("Sidepanel sending SIDEPANEL_CLOSED message")
@@ -28,6 +57,12 @@ export function EmptyState() {
 
       {/* Content */}
       <div className="flex flex-col items-center max-w-sm text-center">
+        {/* Ambient Motion */}
+        <div
+          ref={containerRef}
+          className="w-64 h-64 mb-8"
+        />
+
         <h2
           className="text-2xl font-semibold mb-4"
           style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
