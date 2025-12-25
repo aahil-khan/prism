@@ -1,10 +1,18 @@
-import type { PlasmoCSConfig } from "plasmo"
+import type { PlasmoCSConfig, PlasmoGetStyle } from "plasmo"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 
+import styleText from "data-text:~/style.css"
+
 export const config: PlasmoCSConfig = {
   matches: ["<all_urls>"]
+}
+
+export const getStyle: PlasmoGetStyle = () => {
+  const style = document.createElement("style")
+  style.textContent = styleText
+  return style
 }
 
 export const getShadowHostId = () => "aegis-consent-modal"
@@ -39,72 +47,43 @@ const ConsentOverlay = () => {
     }
   }
 
+  const handleDecline = () => {
+    // Don't set consent, just close the overlay
+    // Next time user opens extension, they'll see Welcome modal again
+    setIsVisible(false)
+  }
+
   if (!isVisible) return null
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 999998,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        fontFamily: "'Breeze Sans', sans-serif"
-      }}>
-      <div
-        style={{
-          width: "360px",
-          backgroundColor: "white",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 4px 24px rgba(0, 0, 0, 0.15)"
-        }}>
-        <h2
-          style={{
-            fontSize: "24px",
-            fontWeight: 600,
-            textAlign: "center",
-            marginBottom: "12px",
-            color: "#080A0B"
-          }}>
-          Your Privacy Matters
-        </h2>
+    <div className="fixed inset-0 z-[999998] flex items-center justify-center bg-black/50 font-[Breeze_Sans]">
+      <div className="w-[500px] bg-white rounded-2xl shadow-2xl relative" style={{ padding: '28px 32px' }}>
+        {/* Close Button */}
+        <button
+          onClick={handleDecline}
+          className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-xl rounded hover:bg-gray-100 transition-colors border-none bg-transparent cursor-pointer"
+          style={{ color: '#9A9FA6' }}>
+          ×
+        </button>
 
-        <p
-          style={{
-            fontSize: "14px",
-            textAlign: "center",
-            marginBottom: "16px",
-            color: "#9A9FA6",
-            lineHeight: "1.5"
-          }}>
-          We take your privacy seriously. Here's how Aegis protects you:
+        <h1 className="text-[26px] font-semibold text-center mb-1.5" style={{ color: '#080A0B' }}>
+          Welcome to Aegis!
+        </h1>
+
+        <p className="text-[15px] text-center mb-5 leading-normal" style={{ color: '#9A9FA6' }}>
+          Aegis stores browsing context locally so you can resume work later.
         </p>
 
         {/* Privacy Features List */}
-        <div style={{ marginBottom: "20px" }}>
+        <div className="mb-[18px]">
           {[
-            "All data stays on your device",
-            "No cloud storage or syncing",
-            "No tracking or analytics",
-            "No third-party sharing",
-            "Full local encryption"
+            "Stores browsing context locally",
+            "No cloud sync",
+            "No account required"
           ].map((feature, idx) => (
-            <div
-              key={idx}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                marginBottom: "8px"
-              }}>
-              <span style={{ color: "#2138DF", fontSize: "14px" }}>•</span>
-              <p style={{ color: "#080A0B", fontSize: "14px", margin: 0 }}>
+            <div key={idx} className="flex items-center gap-2.5 mb-2.5">
+              <span className="text-sm flex-shrink-0" style={{ color: '#9A9FA6' }}>•</span>
+              <p className="text-[15px] m-0" style={{ color: '#080A0B' }}>
                 {feature}
               </p>
             </div>
@@ -112,60 +91,48 @@ const ConsentOverlay = () => {
         </div>
 
         {/* Consent Checkbox */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: "8px",
-            marginBottom: "20px"
-          }}>
-          <Checkbox
+        <div className="flex items-start gap-2.5 mb-3 p-3.5 rounded-lg border" style={{ backgroundColor: '#F8F8F8', borderColor: '#E5E5E5' }}>
+          <input
+            type="checkbox"
             id="consent"
             checked={agreed}
-            onCheckedChange={(checked) => setAgreed(checked as boolean)}
-            style={{ marginTop: "4px" }}
+            onChange={(e) => setAgreed(e.target.checked)}
+            className="mt-0.5 w-[18px] h-[18px] cursor-pointer flex-shrink-0 bg-white border-2 rounded"
+            style={{ accentColor: '#2138DF' }}
           />
-          <label
-            htmlFor="consent"
-            style={{
-              fontSize: "14px",
-              cursor: "pointer",
-              color: "#080A0B"
-            }}>
-            I understand and agree to Aegis privacy practices
+          <label htmlFor="consent" className="text-sm cursor-pointer leading-normal" style={{ color: '#080A0B' }}>
+            I understand that browsing context is stored locally on this device
           </label>
         </div>
 
-        {/* Button */}
-        <Button
-          onClick={handleAccept}
-          disabled={!agreed}
-          style={{
-            width: "100%",
-            height: "40px",
-            fontWeight: 600,
-            backgroundColor: agreed ? "#2138DF" : "#CCCCCC",
-            color: "white",
-            cursor: agreed ? "pointer" : "not-allowed",
-            border: "none",
-            borderRadius: "6px"
-          }}>
-          I Agree
-        </Button>
-
-        <div style={{ textAlign: "center", marginTop: "8px" }}>
-          <button
-            style={{
-              fontSize: "12px",
-              color: "#9A9FA6",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              textDecoration: "underline"
-            }}>
-            Learn more about our privacy policy
+        {/* Learn More Link */}
+        <div className="mb-[18px]">
+          <button className="text-[13px] font-medium bg-transparent border-none cursor-pointer underline p-0" style={{ color: '#2138DF' }}>
+            Learn More
           </button>
         </div>
+
+        {/* Button */}
+        <div className="flex justify-center">
+          <Button
+            onClick={handleAccept}
+            disabled={!agreed}
+            className="w-[280px] h-[46px] font-semibold text-base rounded-full"
+            style={{
+              backgroundColor: agreed ? '#2138DF' : '#CCCCCC',
+              color: 'white'
+            }}>
+            Start Context Learning
+          </Button>
+        </div>
+
+        {/* Helper text */}
+        <p className="text-center mt-3.5 text-xs mb-0.5" style={{ color: '#9A9FA6' }}>
+          What happens next?
+        </p>
+        <p className="text-center text-xs leading-snug" style={{ color: '#9A9FA6' }}>
+          Aegis will quietly learn this session in the background.
+        </p>
       </div>
     </div>
   )

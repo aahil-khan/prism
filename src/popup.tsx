@@ -18,14 +18,9 @@ function IndexPopup() {
   }
 
   useEffect(() => {
-    console.log("Popup mounted, checking consent...")
     chrome.storage.local.get(["aegis-consent"], (result) => {
-      console.log("Consent result:", result)
       if (result["aegis-consent"] === true) {
-        console.log("Setting phase to welcomeback")
         setPhase("welcomeback")
-      } else {
-        console.log("No consent found, staying on welcome")
       }
     })
   }, [])
@@ -46,10 +41,7 @@ function IndexPopup() {
   }
 
   return (
-    <div className="bg-white flex items-center justify-center p-4 min-w-[400px] min-h-[430px]">
-      <div style={{ position: 'absolute', top: 10, left: 10, fontSize: 10 }}>
-        Phase: {phase}
-      </div>
+    <div className="bg-white flex items-center justify-center p-4 min-w-[400px] min-h-[300px]">
       <WelcomeModal 
         open={phase === "welcome"} 
         onOpenChange={() => {}} 
