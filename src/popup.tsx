@@ -1,9 +1,13 @@
+import { useState } from "react"
 import "./style.css"
+import { WelcomeModal } from "@/components/onboarding/WelcomeModal"
 
 function IndexPopup() {
+  const [open, setOpen] = useState(true)
+
   return (
-    <div className="w-96 h-96 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center">
-      <h1 className="text-5xl font-bold text-white drop-shadow-lg">base ready</h1>
+    <div className="min-w-[400px] h-[300px] bg-white flex items-center justify-center">
+      <WelcomeModal open={open} onOpenChange={setOpen} />
     </div>
   )
 }
