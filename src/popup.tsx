@@ -16,18 +16,15 @@ function IndexPopup() {
   }
 
   return (
-    <div className="bg-white flex items-center justify-center p-4 min-w-[400px] min-h-[520px]">
+    <div className="bg-white flex items-center justify-center p-4 min-w-[400px] min-h-[430px]">
       <WelcomeModal 
         open={phase === "welcome"} 
-        onOpenChange={(open) => {
-          if (!open) setPhase("consent")
-        }}
+        onOpenChange={() => {}} 
+        onAccept={handleWelcomeAccept}
       />
       <ConsentModal 
         open={phase === "consent"} 
-        onOpenChange={(open) => {
-          if (!open) setPhase("welcome")
-        }}
+        onOpenChange={() => {}}
         onAccept={handleConsentAccept}
       />
     </div>

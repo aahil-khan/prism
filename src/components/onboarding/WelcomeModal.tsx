@@ -10,14 +10,15 @@ import {
 interface WelcomeModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onAccept: () => void
 }
 
-export function WelcomeModal({ open, onOpenChange }: WelcomeModalProps) {
+export function WelcomeModal({ open, onOpenChange, onAccept }: WelcomeModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogOverlay className="hidden" />
       <DialogContent 
-        className="sm:max-w-[360px] w-[360px] max-h-[90vh] overflow-y-auto border-0 shadow-none [&>button]:hidden" 
+        className="sm:max-w-[360px] w-[360px] max-h-[90vh] border-0 shadow-none [&>button]:hidden"
         style={{ 
           backgroundColor: '#FFFFFF', 
           padding: '20px'
@@ -43,7 +44,7 @@ export function WelcomeModal({ open, onOpenChange }: WelcomeModalProps) {
           </p>
 
           <Button 
-            onClick={() => onOpenChange(false)}
+            onClick={onAccept}
             className="w-full font-semibold h-10"
             style={{ backgroundColor: 'var(--primary)', color: 'white', fontFamily: "'Breeze Sans'" }}>
             Get Started

@@ -28,12 +28,12 @@ export function ConsentModal({ open, onOpenChange, onAccept }: ConsentModalProps
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogOverlay className="hidden" />
       <DialogContent 
-        className="sm:max-w-[360px] w-[360px] max-h-[90vh] overflow-y-auto border-0 shadow-none [&>button]:hidden" 
+        className="sm:max-w-[360px] w-[360px] max-h-[90vh] border-0 shadow-none [&>button]:hidden" 
         style={{ 
           backgroundColor: '#FFFFFF', 
           padding: '20px'
         }}>
-        <div className="flex flex-col">
+        <div className="flex flex-col -mt-5">
           <DialogTitle className="text-2xl font-semibold text-center mb-3" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
             Your Privacy Matters
           </DialogTitle>
@@ -43,7 +43,7 @@ export function ConsentModal({ open, onOpenChange, onAccept }: ConsentModalProps
           </p>
 
           {/* Privacy Features List */}
-          <div className="space-y-3 mb-5">
+          <div className="space-y-2 mb-5">
             {[
               "All data stays on your device",
               "No cloud storage or syncing",
@@ -51,9 +51,9 @@ export function ConsentModal({ open, onOpenChange, onAccept }: ConsentModalProps
               "No third-party sharing",
               "Full local encryption"
             ].map((feature, idx) => (
-              <div key={idx} className="flex items-start gap-2">
-                <span className="text-lg mt-0.5" style={{ color: 'var(--primary)' }}>•</span>
-                <p className="text-sm" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+              <div key={idx} className="flex items-center gap-2">
+                <span className="text-sm flex-shrink-0" style={{ color: 'var(--primary)' }}>•</span>
+                <p className="text-sm leading-tight" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
                   {feature}
                 </p>
               </div>
