@@ -1,24 +1,43 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import "./style.css"
 import { WelcomeModal } from "@/components/onboarding/WelcomeModal"
 import { ConsentModal } from "@/components/onboarding/ConsentModal"
+import { WelcomeBackModal } from "@/components/onboarding/WelcomeBackModal"
 
 function IndexPopup() {
-  const [phase, setPhase] = useState<"welcome" | "consent">("welcome")
+  const [phase, setPhase] = useState<"welcome" | "consent" | "welcomeback">("welcome")
+
+  const openSidePanel = async () => {
+    try {
+      const win = await chrome.windows.getCurrent()
+      await chrome.sidePanel.open({ windowId: win.id })
+      return true
+    } catch (error) {
+      console.error("Error opening side panel:", error)
+      return false
+    }
+  }
+
+  useEffect(() => {
+    const hasConsented = localStorage.getItem("aegis-consent") === "true"
+    if (hasConsented) {
+      setPhase("welcomeback")
+    }
+  }, [])
 
   const handleWelcomeAccept = () => {
     setPhase("consent")
   }
 
   const handleConsentAccept = async () => {
-    // Open side panel on consent
-    try {
-      const window = await chrome.windows.getCurrent()
-      await chrome.sidePanel.open({ windowId: window.id })
-      console.log("Side panel opened successfully")
-    } catch (error) {
-      console.error("Error opening side panel:", error)
-    }
+    localStorage.setItem("aegis-consent", "true")
+    await openSidePanel()
+    window.close()
+  }
+
+  const handleOpenPanel = async () => {
+    await openSidePanel()
+    window.close()
   }
 
   return (
@@ -32,6 +51,11 @@ function IndexPopup() {
         open={phase === "consent"} 
         onOpenChange={() => {}}
         onAccept={handleConsentAccept}
+      />
+      <WelcomeBackModal
+        open={phase === "welcomeback"}
+        onOpenChange={() => {}}
+        onOpenPanel={handleOpenPanel}
       />
     </div>
   )

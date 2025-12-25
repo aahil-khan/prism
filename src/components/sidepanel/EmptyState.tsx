@@ -5,6 +5,11 @@ export function EmptyState() {
     window.close()
   }
 
+  const handleReset = () => {
+    localStorage.removeItem("aegis-consent")
+    alert("Onboarding state reset. Re-open popup to see Welcome & Consent.")
+  }
+
   return (
     <div className="relative h-full flex flex-col items-center justify-center p-6 bg-white">
       {/* Close Button */}
@@ -35,6 +40,13 @@ export function EmptyState() {
           style={{ color: 'var(--gray)', fontFamily: "'Breeze Sans'" }}>
           Everything stays on your device. Nothing leaves unless you decide to share it.
         </p>
+
+        <button
+          onClick={handleReset}
+          className="mt-6 text-xs underline underline-offset-4 opacity-70 transition-opacity hover:opacity-100"
+          style={{ color: 'var(--gray)', fontFamily: "'Breeze Sans'" }}>
+          Reset onboarding (dev)
+        </button>
       </div>
     </div>
   )
