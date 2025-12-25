@@ -37,7 +37,11 @@
       "https://*/*"
     ],
     "permissions": [
-      "tabs"
-    ]
+      "tabs",
+      "sidePanel"
+    ],
+    "side_panel": {
+      "default_path": "sidepanel.html"
+    }
   }
 }

@@ -10,9 +10,15 @@ function IndexPopup() {
     setPhase("consent")
   }
 
-  const handleConsentAccept = () => {
-    // Phase 3 will be side panel - for now, stay on consent
-    console.log("Consent accepted - ready for side panel")
+  const handleConsentAccept = async () => {
+    // Open side panel on consent
+    try {
+      const window = await chrome.windows.getCurrent()
+      await chrome.sidePanel.open({ windowId: window.id })
+      console.log("Side panel opened successfully")
+    } catch (error) {
+      console.error("Error opening side panel:", error)
+    }
   }
 
   return (
