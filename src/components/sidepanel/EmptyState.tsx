@@ -1,6 +1,7 @@
 import { X } from "lucide-react"
 import { useEffect, useRef } from "react"
 import lottie from "lottie-web"
+import { Button } from "@/components/ui/button"
 
 export function EmptyState() {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -45,18 +46,29 @@ export function EmptyState() {
   }
 
   return (
-    <div className="relative h-full flex flex-col items-center justify-center p-6 bg-white">
+    <div className="relative h-full flex flex-col bg-white">
+      {/* Header */}
+      <div className="sticky top-0 z-10 flex items-center gap-3 p-6 border-b bg-white" style={{ borderColor: '#E5E5E5' }}>
+        <div className="w-8 h-8 rounded-lg flex-shrink-0" style={{ backgroundColor: 'var(--primary)' }} />
+        <h1 
+          className="text-xl font-semibold"
+          style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+          Aegis
+        </h1>
+      </div>
+
       {/* Close Button */}
       <button
         onClick={handleClose}
-        className="absolute right-6 top-6 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none"
+        className="absolute right-6 top-6 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none z-20"
         style={{ color: 'var(--gray)' }}>
         <X className="h-5 w-5" />
         <span className="sr-only">Close</span>
       </button>
 
       {/* Content */}
-      <div className="flex flex-col items-center max-w-sm text-center">
+      <div className="flex-1 flex flex-col items-center justify-start p-6 pt-4">
+        <div className="flex flex-col items-center max-w-sm text-center">
         {/* Ambient Motion */}
         <div
           ref={containerRef}
@@ -64,10 +76,16 @@ export function EmptyState() {
         />
 
         <h2
-          className="text-2xl font-semibold mb-4"
+          className="text-2xl font-semibold"
           style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
           Your Memory Timeline
         </h2>
+
+        <p
+          className="text-lg mb-2"
+          style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+          Your browsing memory lives here!
+        </p>
 
         <p
           className="text-sm leading-relaxed"
@@ -76,17 +94,42 @@ export function EmptyState() {
         </p>
 
         <p
-          className="text-sm leading-relaxed mt-4"
+          className="text-sm leading-relaxed mt-2"
           style={{ color: 'var(--gray)', fontFamily: "'Breeze Sans'" }}>
           Everything stays on your device. Nothing leaves unless you decide to share it.
         </p>
 
+        <p
+          className="text-sm leading-relaxed mt-4"
+          style={{ color: '#0072de', fontFamily: "'Breeze Sans'" }}>
+          Want to see an example?
+        </p>
+
+        <div className="flex justify-center mt-2">
+          <Button
+            onClick={() => {}}
+            className="h-[46px] font-semibold text-base rounded-full"
+            style={{
+              backgroundColor: '#0072de',
+              color: 'white'
+            }}>
+            Enable demo history
+          </Button>
+        </div>
+
+        <p
+          className="text-xs leading-relaxed mt-1"
+          style={{ color: 'var(--gray)', fontFamily: "'Breeze Sans'" }}>
+          Try a short demo timeline.
+        </p>
+
         <button
           onClick={handleReset}
-          className="mt-6 text-xs underline underline-offset-4 opacity-70 transition-opacity hover:opacity-100"
+          className="text-xs underline underline-offset-4 opacity-70 transition-opacity hover:opacity-100"
           style={{ color: 'var(--gray)', fontFamily: "'Breeze Sans'" }}>
           Reset onboarding (dev)
         </button>
+        </div>
       </div>
     </div>
   )
