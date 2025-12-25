@@ -104,7 +104,7 @@ const ConsentOverlay = () => {
             checked={agreed}
             onChange={(e) => setAgreed(e.target.checked)}
             className="mt-0.5 w-[18px] h-[18px] cursor-pointer flex-shrink-0 bg-white border-2 rounded"
-            style={{ accentColor: '#2138DF' }}
+            style={{ accentColor: '#0072de' }}
           />
           <label htmlFor="consent" className="text-sm cursor-pointer leading-normal" style={{ color: '#080A0B' }}>
             I understand that browsing context is stored locally on this device
@@ -116,7 +116,7 @@ const ConsentOverlay = () => {
           <button 
             onClick={() => setShowLearnMore(true)}
             className="text-[13px] font-medium bg-transparent border-none cursor-pointer underline p-0" 
-            style={{ color: '#2138DF' }}>
+            style={{ color: '#0072de' }}>
             Learn More
           </button>
         </div>
@@ -128,7 +128,7 @@ const ConsentOverlay = () => {
             disabled={!agreed}
             className="w-[280px] h-[46px] font-semibold text-base rounded-full"
             style={{
-              backgroundColor: agreed ? '#2138DF' : '#CCCCCC',
+              backgroundColor: agreed ? '#0072de' : '#CCCCCC',
               color: 'white'
             }}>
             Start Context Learning
@@ -172,9 +172,9 @@ const ConsentOverlay = () => {
               Aegis saves browsing context, not content.
             </p>
             <ul className="space-y-1 ml-4">
-              <li className="text-sm" style={{ color: '#2138DF' }}>Page titles and domains</li>
-              <li className="text-sm" style={{ color: '#2138DF' }}>Time spent during a session</li>
-              <li className="text-sm" style={{ color: '#2138DF' }}>Tab and navigation patterns</li>
+              <li className="text-sm" style={{ color: '#0072de' }}>Page titles and domains</li>
+              <li className="text-sm" style={{ color: '#0072de' }}>Time spent during a session</li>
+              <li className="text-sm" style={{ color: '#0072de' }}>Tab and navigation patterns</li>
             </ul>
             <p className="text-xs mt-2 italic" style={{ color: '#9A9FA6' }}>
               (Page content and form inputs are not stored.)
@@ -190,11 +190,11 @@ const ConsentOverlay = () => {
               Stored only on this device
             </p>
             <ul className="space-y-1 ml-4">
-              <li className="text-sm" style={{ color: '#2138DF' }}>No cloud sync</li>
-              <li className="text-sm" style={{ color: '#2138DF' }}>No external servers</li>
-              <li className="text-sm" style={{ color: '#2138DF' }}>No account or sign-in</li>
+              <li className="text-sm" style={{ color: '#0072de' }}>No cloud sync</li>
+              <li className="text-sm" style={{ color: '#0072de' }}>No external servers</li>
+              <li className="text-sm" style={{ color: '#0072de' }}>No account or sign-in</li>
             </ul>
-            <p className="text-xs mt-2" style={{ color: '#2138DF' }}>
+            <p className="text-xs mt-2" style={{ color: '#0072de' }}>
               Your data never leaves this browser.
             </p>
           </div>
@@ -208,13 +208,13 @@ const ConsentOverlay = () => {
               You stay in control
             </p>
             <ul className="space-y-1 ml-4">
-              <li className="text-sm" style={{ color: '#2138DF' }}>Pause context learning anytime</li>
-              <li className="text-sm" style={{ color: '#2138DF' }}>Clear storage context from settings</li>
-              <li className="text-sm" style={{ color: '#2138DF' }}>Nothing is shared automatically</li>
+              <li className="text-sm" style={{ color: '#0072de' }}>Pause context learning anytime</li>
+              <li className="text-sm" style={{ color: '#0072de' }}>Clear storage context from settings</li>
+              <li className="text-sm" style={{ color: '#0072de' }}>Nothing is shared automatically</li>
             </ul>
           </div>
 
-          <p className="text-xs italic" style={{ color: '#2138DF' }}>
+          <p className="text-xs italic" style={{ color: '#0072de' }}>
             This feature runs entirely locally.
           </p>
         </div>

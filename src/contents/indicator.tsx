@@ -136,7 +136,7 @@ const AegisIndicator = () => {
         style={{
           width: "40px",
           height: "40px",
-          background: "linear-gradient(135deg, #2138DF 0%, #E91E63 100%)",
+          background: "linear-gradient(135deg, #0072de 0%, #E91E63 100%)",
           borderRadius: "8px 0 0 8px",
           cursor: "pointer",
           boxShadow: "0 2px 8px rgba(0, 0, 0, 0.2)"
