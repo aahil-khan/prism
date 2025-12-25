@@ -17,7 +17,7 @@ export function WelcomeModal({ open, onOpenChange }: WelcomeModalProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogOverlay className="hidden" />
       <DialogContent 
-        className="sm:max-w-[360px] w-[360px] border-0 shadow-none [&>button]:hidden" 
+        className="sm:max-w-[360px] w-[360px] max-h-[90vh] overflow-y-auto border-0 shadow-none [&>button]:hidden" 
         style={{ 
           backgroundColor: '#FFFFFF', 
           padding: '20px'
