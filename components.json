@@ -3,14 +3,16 @@
   "style": "default",
   "rsc": false,
   "tsx": true,
-  "aliasPrefix": "~",
-  "baseColor": "slate",
-  "components": {
-    "alias": "~/components/ui",
-    "path": "src/components/ui"
+  "tailwind": {
+    "config": "tailwind.config.js",
+    "css": "src/style.css",
+    "baseColor": "slate",
+    "cssVariables": false
   },
-  "utils": {
-    "alias": "~/lib/utils",
-    "path": "src/lib/utils.ts"
+  "aliases": {
+    "components": "@/components",
+    "utils": "@/lib/utils",
+    "ui": "@/components/ui",
+    "lib": "@/lib"
   }
 }
