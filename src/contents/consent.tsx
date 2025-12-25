@@ -20,6 +20,7 @@ export const getShadowHostId = () => "aegis-consent-modal"
 const ConsentOverlay = () => {
   const [isVisible, setIsVisible] = useState(false)
   const [agreed, setAgreed] = useState(false)
+  const [showLearnMore, setShowLearnMore] = useState(false)
 
   useEffect(() => {
     // Listen for message to show consent
@@ -57,14 +58,19 @@ const ConsentOverlay = () => {
 
   return (
     <div className="fixed inset-0 z-[999998] flex items-center justify-center bg-black/50 font-[Breeze_Sans]">
-      <div className="w-[500px] bg-white rounded-2xl shadow-2xl relative" style={{ padding: '28px 32px' }}>
+      <div 
+        className="w-[600px] bg-white rounded-2xl shadow-2xl relative overflow-hidden" 
+        style={{ padding: '24px 32px' }}
+        onClick={() => showLearnMore && setShowLearnMore(false)}>
         {/* Close Button */}
-        <button
-          onClick={handleDecline}
-          className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-xl rounded hover:bg-gray-100 transition-colors border-none bg-transparent cursor-pointer"
-          style={{ color: '#9A9FA6' }}>
-          ×
-        </button>
+        {!showLearnMore && (
+          <button
+            onClick={handleDecline}
+            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-xl rounded hover:bg-gray-100 transition-colors border-none bg-transparent cursor-pointer z-10"
+            style={{ color: '#9A9FA6' }}>
+            ×
+          </button>
+        )}
 
         <h1 className="text-[26px] font-semibold text-center mb-1.5" style={{ color: '#080A0B' }}>
           Welcome to Aegis!
@@ -107,7 +113,10 @@ const ConsentOverlay = () => {
 
         {/* Learn More Link */}
         <div className="mb-[18px]">
-          <button className="text-[13px] font-medium bg-transparent border-none cursor-pointer underline p-0" style={{ color: '#2138DF' }}>
+          <button 
+            onClick={() => setShowLearnMore(true)}
+            className="text-[13px] font-medium bg-transparent border-none cursor-pointer underline p-0" 
+            style={{ color: '#2138DF' }}>
             Learn More
           </button>
         </div>
@@ -133,6 +142,82 @@ const ConsentOverlay = () => {
         <p className="text-center text-xs leading-snug" style={{ color: '#9A9FA6' }}>
           Aegis will quietly learn this session in the background.
         </p>
+
+        {/* Learn More Slide-out Panel */}
+        <div 
+          className="absolute top-0 bottom-0 right-0 w-[400px] bg-white shadow-2xl overflow-y-auto transition-transform duration-300 ease-in-out"
+          style={{ 
+            padding: '32px 28px',
+            transform: showLearnMore ? 'translateX(0)' : 'translateX(100%)'
+          }}
+          onClick={(e) => e.stopPropagation()}>
+          {/* Close Button */}
+          <button
+            onClick={() => setShowLearnMore(false)}
+            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-xl rounded hover:bg-gray-100 transition-colors border-none bg-transparent cursor-pointer"
+            style={{ color: '#9A9FA6' }}>
+            ×
+          </button>
+
+          <h2 className="text-2xl font-semibold mb-6" style={{ color: '#080A0B' }}>
+            Learn More
+          </h2>
+
+          {/* What is stored? */}
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold mb-2" style={{ color: '#080A0B' }}>
+              What is stored?
+            </h3>
+            <p className="text-sm mb-2" style={{ color: '#080A0B' }}>
+              Aegis saves browsing context, not content.
+            </p>
+            <ul className="space-y-1 ml-4">
+              <li className="text-sm" style={{ color: '#2138DF' }}>Page titles and domains</li>
+              <li className="text-sm" style={{ color: '#2138DF' }}>Time spent during a session</li>
+              <li className="text-sm" style={{ color: '#2138DF' }}>Tab and navigation patterns</li>
+            </ul>
+            <p className="text-xs mt-2 italic" style={{ color: '#9A9FA6' }}>
+              (Page content and form inputs are not stored.)
+            </p>
+          </div>
+
+          {/* Where it lives? */}
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold mb-2" style={{ color: '#080A0B' }}>
+              Where it lives?
+            </h3>
+            <p className="text-sm mb-2" style={{ color: '#080A0B' }}>
+              Stored only on this device
+            </p>
+            <ul className="space-y-1 ml-4">
+              <li className="text-sm" style={{ color: '#2138DF' }}>No cloud sync</li>
+              <li className="text-sm" style={{ color: '#2138DF' }}>No external servers</li>
+              <li className="text-sm" style={{ color: '#2138DF' }}>No account or sign-in</li>
+            </ul>
+            <p className="text-xs mt-2" style={{ color: '#2138DF' }}>
+              Your data never leaves this browser.
+            </p>
+          </div>
+
+          {/* Your Control */}
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold mb-2" style={{ color: '#080A0B' }}>
+              Your Control
+            </h3>
+            <p className="text-sm mb-2" style={{ color: '#080A0B' }}>
+              You stay in control
+            </p>
+            <ul className="space-y-1 ml-4">
+              <li className="text-sm" style={{ color: '#2138DF' }}>Pause context learning anytime</li>
+              <li className="text-sm" style={{ color: '#2138DF' }}>Clear storage context from settings</li>
+              <li className="text-sm" style={{ color: '#2138DF' }}>Nothing is shared automatically</li>
+            </ul>
+          </div>
+
+          <p className="text-xs italic" style={{ color: '#2138DF' }}>
+            This feature runs entirely locally.
+          </p>
+        </div>
       </div>
     </div>
   )
