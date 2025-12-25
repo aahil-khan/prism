@@ -11,7 +11,7 @@ export function EmptyState() {
   }
 
   const handleReset = () => {
-    localStorage.removeItem("aegis-consent")
+    chrome.storage.local.remove("aegis-consent")
     alert("Onboarding state reset. Re-open popup to see Welcome & Consent.")
   }
 

@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react"
 import "./style.css"
 import { WelcomeModal } from "@/components/onboarding/WelcomeModal"
-import { ConsentModal } from "@/components/onboarding/ConsentModal"
 import { WelcomeBackModal } from "@/components/onboarding/WelcomeBackModal"
 
 function IndexPopup() {
-  const [phase, setPhase] = useState<"welcome" | "consent" | "welcomeback">("welcome")
+  const [phase, setPhase] = useState<"welcome" | "welcomeback">("welcome")
 
   const openSidePanel = async () => {
     try {
@@ -19,19 +18,25 @@ function IndexPopup() {
   }
 
   useEffect(() => {
-    const hasConsented = localStorage.getItem("aegis-consent") === "true"
-    if (hasConsented) {
-      setPhase("welcomeback")
-    }
+    console.log("Popup mounted, checking consent...")
+    chrome.storage.local.get(["aegis-consent"], (result) => {
+      console.log("Consent result:", result)
+      if (result["aegis-consent"] === true) {
+        console.log("Setting phase to welcomeback")
+        setPhase("welcomeback")
+      } else {
+        console.log("No consent found, staying on welcome")
+      }
+    })
   }, [])
 
   const handleWelcomeAccept = () => {
-    setPhase("consent")
-  }
-
-  const handleConsentAccept = async () => {
-    localStorage.setItem("aegis-consent", "true")
-    await openSidePanel()
+    // Send message to content script to show consent overlay
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]?.id) {
+        chrome.tabs.sendMessage(tabs[0].id, { type: "SHOW_CONSENT" })
+      }
+    })
     window.close()
   }
 
@@ -42,15 +47,13 @@ function IndexPopup() {
 
   return (
     <div className="bg-white flex items-center justify-center p-4 min-w-[400px] min-h-[430px]">
+      <div style={{ position: 'absolute', top: 10, left: 10, fontSize: 10 }}>
+        Phase: {phase}
+      </div>
       <WelcomeModal 
         open={phase === "welcome"} 
         onOpenChange={() => {}} 
         onAccept={handleWelcomeAccept}
-      />
-      <ConsentModal 
-        open={phase === "consent"} 
-        onOpenChange={() => {}}
-        onAccept={handleConsentAccept}
       />
       <WelcomeBackModal
         open={phase === "welcomeback"}
