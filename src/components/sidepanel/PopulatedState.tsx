@@ -1,5 +1,5 @@
-import { X, Search, ChevronDown } from "lucide-react"
-import { useState, useRef } from "react"
+import { X, Search, ChevronDown, Settings, ArrowLeft, ExternalLink, MoreVertical, ExternalLinkIcon, Copy, Trash2, EyeOff } from "lucide-react"
+import { useState, useRef, useEffect } from "react"
 
 // Mock filter data - will be fetched from API
 const MOCK_FILTERS = [
@@ -232,43 +232,48 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
   }
 
   return (
-    <div className="relative h-full flex flex-col" style={{ backgroundColor: '#F2F4F7' }}>
+    <div className="relative h-full flex flex-col" style={{ backgroundColor: '#FFFFFF' }}>
       {/* Header */}
-      <div className="sticky top-0 z-10 flex items-center justify-between p-2 pb-1 bg-white" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+      <div className="sticky top-0 z-10 flex items-center justify-between p-6 border-b bg-white" style={{ borderColor: '#E5E5E5' }}>
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--primary)' }} />
+          <div className="w-8 h-8 rounded-lg flex-shrink-0" style={{ backgroundColor: 'var(--primary)' }} />
           <h1 
-            className="text-lg font-bold"
+            className="text-xl font"
             style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
             Aegis
           </h1>
         </div>
         
-        {/* Close Button */}
+        {/* Settings Button */}
         <button
-          onClick={handleClose}
+          onClick={() => {}}
           className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none"
           style={{ color: 'var(--gray)' }}>
-          <X className="h-5 w-5" />
-          <span className="sr-only">Close</span>
+          <Settings className="h-5 w-5" />
+          <span className="sr-only">Settings</span>
         </button>
       </div>
 
       {/* Content */}
       <div className="flex-1 flex flex-col gap-0 overflow-y-auto">
         {/* Sticky Search & Filters */}
-        <div className="sticky top-0 z-20 bg-white px-2 pt-1 pb-2 -mx-0" style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
-          {/* Search Bar */}
-          <div className="relative flex items-center gap-3 px-4 py-2 rounded-full mb-3" style={{ backgroundColor: '#E8E8E8' }}>
-            <Search className="h-4 w-4" style={{ color: '#9A9FA6' }} />
-            <input
-              type="text"
-              placeholder="Search sessions..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1 bg-transparent outline-none text-sm"
-              style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}
-            />
+        <div className="sticky top-0 z-20 bg-white px-2 pt-4 pb-2 -mx-0">
+          {/* Back Button and Search Bar */}
+          <div className="flex items-center gap-2 mb-5">
+            <button className="p-2" onClick={onShowEmpty} style={{ color: '#9A9FA6' }}>
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <div className="relative flex items-center gap-3 px-4 py-2.5 rounded-full flex-1" style={{ backgroundColor: '#F5F5F5' }}>
+              <Search className="h-4 w-4" style={{ color: '#9A9FA6' }} />
+              <input
+                type="text"
+                placeholder="Search what you have seen before"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1 bg-transparent outline-none text-sm"
+                style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}
+              />
+            </div>
           </div>
 
           {/* Filters Section */}
@@ -282,8 +287,9 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
               }}
               className="px-4 py-2 rounded-full text-xs font-medium transition-all"
               style={{
-                backgroundColor: selectedFilter === filter.id ? '#0074FB' : '#D9D9D9',
-                color: selectedFilter === filter.id ? 'white' : '#080A0B',
+                backgroundColor: selectedFilter === filter.id ? '#000000' : '#FFFFFF',
+                color: selectedFilter === filter.id ? '#FFFFFF' : '#000000',
+                border: '1px solid #000000',
                 fontFamily: "'Breeze Sans'",
               }}>
               {filter.label}
@@ -295,7 +301,7 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
             <button
               onClick={() => setExpandFilters(!expandFilters)}
               className="inline-flex items-center gap-1 text-xs font-medium transition-colors ml-auto"
-              style={{ color: 'var(--primary)', fontFamily: "'Breeze Sans'" }}>
+              style={{ color: '#000000', fontFamily: "'Breeze Sans'" }}>
               {expandFilters ? "Less" : "More"}
               <ChevronDown
                 className={`h-3 w-3 transition-transform ${expandFilters ? "rotate-180" : ""}`}
@@ -310,7 +316,7 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
           {/* Today Section */}
           <DaySection
             dayKey="today"
-            dayLabel="Today"
+            dayLabel="Today- Friday, December 26, 2025"
             sessions={MOCK_SESSIONS.today}
             isExpanded={expandedDays.includes("today")}
             onToggleDay={(key) => {
@@ -329,7 +335,7 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
           {/* Yesterday Section */}
           <DaySection
             dayKey="yesterday"
-            dayLabel="Yesterday"
+            dayLabel="Yesterday - Thursday, December 25, 2025"
             sessions={MOCK_SESSIONS.yesterday}
             isExpanded={expandedDays.includes("yesterday")}
             onToggleDay={(key) => {
@@ -405,7 +411,7 @@ function DaySection({
   return (
     <div className="flex flex-col gap-3 pb-0 pt-1 p-2">
       {/* Day Header */}
-      <div className="text-sm font-semibold px-2" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+      <div className="text-sm font-normal px-2 mb-2" style={{ color: '#0072DF', fontFamily: "'Breeze Sans'" }}>
         <span>{dayLabel}</span>
       </div>
 
@@ -448,6 +454,25 @@ interface SessionItemProps {
 }
 
 function SessionItem({ session, isExpanded, onToggle }: SessionItemProps) {
+  const [openMenuIndex, setOpenMenuIndex] = useState<number | null>(null)
+  
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      if (openMenuIndex !== null) {
+        setOpenMenuIndex(null)
+      }
+    }
+    
+    if (openMenuIndex !== null) {
+      document.addEventListener('click', handleClickOutside)
+    }
+    
+    return () => {
+      document.removeEventListener('click', handleClickOutside)
+    }
+  }, [openMenuIndex])
+  
   // Extract site names from links (first 2-3)
   const linkedSites = session.links.slice(0, 3).map((link) => {
     // Extract domain from URL
@@ -460,54 +485,24 @@ function SessionItem({ session, isExpanded, onToggle }: SessionItemProps) {
 
   return (
     <div 
-      className="flex flex-col gap-1.5 p-2.5 rounded-lg transition-all"
+      onClick={onToggle}
+      className="flex flex-col gap-1.5 p-3 rounded-xl transition-all cursor-pointer"
       style={{ 
-        backgroundColor: '#FAFAFA',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+        backgroundColor: isExpanded ? '#F5F5F5' : '#FFFFFF',
+        border: '1px solid #BCBCBC'
       }}>
-      {/* Row 1: Session Header with title and duration */}
-      <button
-        onClick={onToggle}
-        className="flex items-center justify-between gap-2 w-full">
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <ChevronDown
-            className={`h-3 w-3 flex-shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`}
-            style={{ color: 'var(--gray)' }}
-          />
+      {/* Session Header */}
+      <div className="flex items-center gap-2 w-full">
+        <div className="flex items-center gap-3 flex-1">
           <p
-            className="text-xs font-bold leading-tight"
+            className="text-sm font-medium leading-tight"
             style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
             {session.title}
           </p>
-        </div>
-        <span className="text-xs flex-shrink-0" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
-          {session.timeStart} - {session.timeEnd}
-        </span>
-      </button>
-
-      {/* Row 2: Sites visited in this session */}
-      <div className="flex items-center gap-1.5 pl-5">
-        {linkedSites.map((site, index) => (
-          <span
-            key={index}
-            className="text-2xs px-1.5 py-0.5 rounded"
-            style={{ 
-              backgroundColor: '#F0F0F0',
-              color: '#9A9FA6',
-              fontFamily: "'Breeze Sans'",
-              fontSize: '10px'
-            }}>
-            {site.domain}
-          </span>
-        ))}
-      </div>
-
-      {/* Links List - Chrome history style */}
-      {isExpanded && (
-        <div className="flex flex-col gap-2 pl-5 pt-2">
-          {/* Reload Session Button */}
+          {/* Reload Session Icon */}
           <button
-            onClick={async () => {
+            onClick={async (e) => {
+              e.stopPropagation()
               // Open all links from the session in a new tab group
               const tabIds: number[] = []
               
@@ -519,7 +514,6 @@ function SessionItem({ session, isExpanded, onToggle }: SessionItemProps) {
               // Create a tab group with the session name
               if (tabIds.length > 0) {
                 const groupId = await chrome.tabs.group({ tabIds })
-                // Update group with title and a color
                 chrome.tabGroups.update(groupId, { 
                   title: session.title,
                   collapsed: false
@@ -528,44 +522,119 @@ function SessionItem({ session, isExpanded, onToggle }: SessionItemProps) {
                 })
               }
             }}
-            className="text-xs font-medium px-2 py-1.5 rounded transition-colors"
-            style={{ 
-              color: 'var(--primary)',
-              backgroundColor: '#F0F0F0',
-              fontFamily: "'Breeze Sans'"
-            }}>
-            Reload Session
+            className="p-1 hover:bg-gray-100 rounded transition-colors"
+            style={{ color: '#9A9FA6' }}>
+            <ExternalLink className="h-4 w-4" />
           </button>
+        </div>
+        {/* Expand/Collapse Icon */}
+        <button
+          onClick={(e) => e.stopPropagation()}
+          className="p-1 hover:bg-gray-100 rounded transition-colors">
+          <ChevronDown
+            className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+            style={{ color: '#9A9FA6' }}
+          />
+        </button>
+      </div>
 
+      {/* Links List */}
+      {isExpanded && (
+        <div className="flex flex-col gap-1 pt-2" onClick={(e) => e.stopPropagation()}>
           {/* Individual Links */}
           {session.links.map((link, index) => {
-            // Extract domain from URL
-            const url = new URL(`https://${link.url}`)
-            const domain = url.hostname.replace('www.', '')
             // Generate a time for each link based on index
             const linkTime = new Date(new Date(`2024-01-01 ${session.timeStart}`).getTime() + index * 5 * 60000)
-            const timeStr = linkTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+            const timeStr = linkTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
 
             return (
-              <a
-                key={index}
-                href={`https://${link.url}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-start justify-between gap-3 px-2 py-1.5 rounded transition-colors hover:bg-gray-100"
-                style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
-                <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                  <p className="text-xs leading-tight truncate hover:text-blue-600" style={{ color: 'var(--primary)' }}>
+              <div key={index} className="relative flex items-center justify-between gap-3 py-1">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setOpenMenuIndex(openMenuIndex === index ? null : index)
+                    }}
+                    className="hover:bg-gray-200 rounded p-0.5 transition-colors">
+                    <MoreVertical className="h-3.5 w-3.5" style={{ color: '#9A9FA6' }} />
+                  </button>
+                  <a
+                    href={`https://${link.url}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs leading-tight truncate flex-1"
+                    style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
                     {link.title}
-                  </p>
-                  <span className="text-2xs" style={{ color: '#9A9FA6', fontSize: '10px' }}>
-                    {domain}
-                  </span>
+                  </a>
                 </div>
-                <span className="text-2xs flex-shrink-0" style={{ color: '#9A9FA6', fontSize: '10px' }}>
+                <span className="text-xs flex-shrink-0" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
                   {timeStr}
                 </span>
-              </a>
+
+                {/* Dropdown Menu */}
+                {openMenuIndex === index && (
+                  <div
+                    className="absolute left-6 top-6 z-30 bg-white rounded-xl py-2 min-w-[200px]"
+                    style={{ 
+                      border: '1px solid #E5E5E5',
+                      boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)'
+                    }}
+                    onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => {
+                        window.open(`https://${link.url}`, '_blank')
+                        setOpenMenuIndex(null)
+                      }}
+                      className="w-full text-left px-4 py-2 text-xs hover:bg-gray-50 transition-colors flex items-center gap-3"
+                      style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
+                      <ExternalLinkIcon className="h-3.5 w-3.5" style={{ color: '#9A9FA6' }} />
+                      <span>Open in new tab</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        window.open(`https://${link.url}`, '_blank', 'noopener,noreferrer')
+                        setOpenMenuIndex(null)
+                      }}
+                      className="w-full text-left px-4 py-2 text-xs hover:bg-gray-50 transition-colors flex items-center gap-3"
+                      style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
+                      <ExternalLinkIcon className="h-3.5 w-3.5" style={{ color: '#9A9FA6' }} />
+                      <span>Open in new window</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(`https://${link.url}`)
+                        setOpenMenuIndex(null)
+                      }}
+                      className="w-full text-left px-4 py-2 text-xs hover:bg-gray-50 transition-colors flex items-center gap-3"
+                      style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
+                      <Copy className="h-3.5 w-3.5" style={{ color: '#9A9FA6' }} />
+                      <span>Copy link</span>
+                    </button>
+                    <div className="h-px mx-2 my-1" style={{ backgroundColor: '#E5E5E5' }} />
+                    <button
+                      onClick={() => {
+                        // Delete functionality would be implemented here
+                        console.log('Delete from session:', link.url)
+                        setOpenMenuIndex(null)
+                      }}
+                      className="w-full text-left px-4 py-2 text-xs hover:bg-red-50 transition-colors flex items-center gap-3"
+                      style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
+                      <Trash2 className="h-3.5 w-3.5" style={{ color: '#9A9FA6' }} />
+                      <span>Delete from session</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        chrome.windows.create({ url: `https://${link.url}`, incognito: true })
+                        setOpenMenuIndex(null)
+                      }}
+                      className="w-full text-left px-4 py-2 text-xs hover:bg-gray-50 transition-colors flex items-center gap-3"
+                      style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
+                      <EyeOff className="h-3.5 w-3.5" style={{ color: '#9A9FA6' }} />
+                      <span>Open in incognito</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             )
           })}
         </div>
