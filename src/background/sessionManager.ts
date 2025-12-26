@@ -1,6 +1,7 @@
 import type { PageEvent } from "~/types/page-event"
 import type { Session } from "~/types/session"
 import { loadSessions, saveSessions } from "./sessionStore"
+import { checkSessionChange } from "./ephemeralBehavior"
 
 const SESSION_GAP_MS = 30 * 60 * 1000 // 30 minutes
 
@@ -15,6 +16,12 @@ export async function initializeSessions(): Promise<void> {
   try {
     sessions = await loadSessions()
     isInitialized = true
+    
+    // Initialize ephemeral tracking for last session if exists
+    const lastSession = getLastSession()
+    if (lastSession) {
+      checkSessionChange(lastSession.id)
+    }
   } catch (error) {
     console.error("Failed to initialize sessions:", error)
     sessions = []
@@ -45,23 +52,27 @@ export async function processPageEvent(pageEvent: PageEvent): Promise<void> {
 
   if (!lastSession) {
     // Create first session
-    sessions.push({
+    const newSession = {
       id: generateSessionId(),
       startTime: pageEvent.timestamp,
       endTime: pageEvent.timestamp,
       pages: [pageEvent]
-    })
+    }
+    sessions.push(newSession)
+    checkSessionChange(newSession.id)
   } else {
     // Check if we need to create a new session
     const timeSinceLastEvent = pageEvent.timestamp - lastSession.endTime
     if (timeSinceLastEvent > SESSION_GAP_MS) {
       // Create new session
-      sessions.push({
+      const newSession = {
         id: generateSessionId(),
         startTime: pageEvent.timestamp,
         endTime: pageEvent.timestamp,
         pages: [pageEvent]
-      })
+      }
+      sessions.push(newSession)
+      checkSessionChange(newSession.id)
     } else {
       // Append to existing session
       lastSession.pages.push(pageEvent)
