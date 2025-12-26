@@ -32,4 +32,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 })
 
+// Listen for consent granted message to store consent
+chrome.runtime.onMessage.addListener((msg, sender) => {
+  if (msg.type === "CONSENT_GRANTED") {
+    chrome.storage.local.set({ "aegis-consent": true })
+  }
+})
+
+
 export {}

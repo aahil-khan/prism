@@ -37,7 +37,8 @@ const ConsentOverlay = () => {
 
   const handleAccept = () => {
     if (agreed) {
-      chrome.storage.local.set({ "aegis-consent": true })
+      // chrome.storage.local.set({ "aegis-consent": true })
+      chrome.runtime.sendMessage({ type: "CONSENT_GRANTED" })
       setIsVisible(false)
       
       // Send message to background to open sidebar
