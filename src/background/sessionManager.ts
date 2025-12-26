@@ -1,9 +1,26 @@
 import type { PageEvent } from "~/types/page-event"
 import type { Session } from "~/types/session"
+import { loadSessions, saveSessions } from "./sessionStore"
 
 const SESSION_GAP_MS = 30 * 60 * 1000 // 30 minutes
 
 let sessions: Session[] = []
+let isInitialized = false
+
+/**
+ * Initialize sessions from persistent storage
+ */
+export async function initializeSessions(): Promise<void> {
+  if (isInitialized) return
+  try {
+    sessions = await loadSessions()
+    isInitialized = true
+  } catch (error) {
+    console.error("Failed to initialize sessions:", error)
+    sessions = []
+    isInitialized = true
+  }
+}
 
 /**
  * Generate a unique session ID (timestamp-based)
@@ -23,7 +40,7 @@ function getLastSession(): Session | undefined {
  * Process a page event and add it to a session
  * Creates a new session if the gap from the last event exceeds SESSION_GAP_MS
  */
-export function processPageEvent(pageEvent: PageEvent): void {
+export async function processPageEvent(pageEvent: PageEvent): Promise<void> {
   const lastSession = getLastSession()
 
   if (!lastSession) {
@@ -34,23 +51,30 @@ export function processPageEvent(pageEvent: PageEvent): void {
       endTime: pageEvent.timestamp,
       pages: [pageEvent]
     })
-    return
+  } else {
+    // Check if we need to create a new session
+    const timeSinceLastEvent = pageEvent.timestamp - lastSession.endTime
+    if (timeSinceLastEvent > SESSION_GAP_MS) {
+      // Create new session
+      sessions.push({
+        id: generateSessionId(),
+        startTime: pageEvent.timestamp,
+        endTime: pageEvent.timestamp,
+        pages: [pageEvent]
+      })
+    } else {
+      // Append to existing session
+      lastSession.pages.push(pageEvent)
+      lastSession.endTime = pageEvent.timestamp
+    }
   }
 
-  // Check if we need to create a new session
-  const timeSinceLastEvent = pageEvent.timestamp - lastSession.endTime
-  if (timeSinceLastEvent > SESSION_GAP_MS) {
-    // Create new session
-    sessions.push({
-      id: generateSessionId(),
-      startTime: pageEvent.timestamp,
-      endTime: pageEvent.timestamp,
-      pages: [pageEvent]
-    })
-  } else {
-    // Append to existing session
-    lastSession.pages.push(pageEvent)
-    lastSession.endTime = pageEvent.timestamp
+  // Persist sessions
+  try {
+    await saveSessions(sessions)
+  } catch (error) {
+    console.error("Failed to persist sessions:", error)
+    // Sessions remain in memory even if persistence fails
   }
 }
 

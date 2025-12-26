@@ -6,7 +6,12 @@ import {
   setupOpenSidepanelListener
 } from "./sidepanel-listeners"
 import { setupConsentListener } from "./consent-listener"
-import { getSessions } from "./sessionManager"
+import { getSessions, initializeSessions } from "./sessionManager"
+
+// Initialize sessions from IndexedDB on startup
+initializeSessions().then(() => {
+  console.log("✅ Sessions initialized from IndexedDB")
+})
 
 // Initialize all listeners
 setupPageVisitListener()
