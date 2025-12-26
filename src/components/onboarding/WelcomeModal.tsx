@@ -17,7 +17,7 @@ export function WelcomeModal({ open, onOpenChange, onAccept }: WelcomeModalProps
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogOverlay className="hidden" />
       <DialogContent 
-        className="sm:max-w-[360px] w-[360px] max-h-[90vh] border-0 shadow-none duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 !data-[state=closed]:slide-out-to-none !data-[state=open]:slide-in-from-none !data-[state=closed]:zoom-out-0 !data-[state=open]:zoom-in-0"
+        className="sm:max-w-[360px] w-[360px] max-h-[90vh] border-0 shadow-none duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 !data-[state=closed]:slide-out-to-none !data-[state=open]:slide-in-from-none !data-[state=closed]:zoom-out-0 !data-[state=open]:zoom-in-0 [&>button]:hidden"
         style={{ 
           backgroundColor: '#FFFFFF', 
           padding: '24px'
