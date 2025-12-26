@@ -3,4 +3,6 @@ export type PageEvent = {
   title: string
   domain: string
   timestamp: number
+  wasForeground?: boolean
+  referrer?: string
 }

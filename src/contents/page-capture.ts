@@ -12,7 +12,9 @@ const capturePageVisit = () => {
     url: location.href,
     title: document.title,
     domain: location.hostname,
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    wasForeground: document.visibilityState === "visible",
+    referrer: document.referrer || undefined
   }
 
   chrome.runtime.sendMessage({
