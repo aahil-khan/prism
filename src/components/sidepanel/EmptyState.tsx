@@ -3,7 +3,11 @@ import { useEffect, useRef } from "react"
 import lottie from "lottie-web"
 import { Button } from "@/components/ui/button"
 
-export function EmptyState() {
+interface EmptyStateProps {
+  onShowPopulated?: () => void
+}
+
+export function EmptyState({ onShowPopulated }: EmptyStateProps) {
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -48,23 +52,25 @@ export function EmptyState() {
   return (
     <div className="relative h-full flex flex-col bg-white">
       {/* Header */}
-      <div className="sticky top-0 z-10 flex items-center gap-3 p-6 border-b bg-white" style={{ borderColor: '#E5E5E5' }}>
-        <div className="w-8 h-8 rounded-lg flex-shrink-0" style={{ backgroundColor: 'var(--primary)' }} />
-        <h1 
-          className="text-xl font-semibold"
-          style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
-          Aegis
-        </h1>
+      <div className="sticky top-0 z-10 flex items-center justify-between p-6 border-b bg-white" style={{ borderColor: '#E5E5E5' }}>
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg flex-shrink-0" style={{ backgroundColor: 'var(--primary)' }} />
+          <h1 
+            className="text-xl font-semibold"
+            style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+            Aegis
+          </h1>
+        </div>
+        
+        {/* Close Button */}
+        <button
+          onClick={handleClose}
+          className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none"
+          style={{ color: 'var(--gray)' }}>
+          <X className="h-5 w-5" />
+          <span className="sr-only">Close</span>
+        </button>
       </div>
-
-      {/* Close Button */}
-      <button
-        onClick={handleClose}
-        className="absolute right-6 top-6 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none z-20"
-        style={{ color: 'var(--gray)' }}>
-        <X className="h-5 w-5" />
-        <span className="sr-only">Close</span>
-      </button>
 
       {/* Content */}
       <div className="flex-1 flex flex-col items-center justify-start p-6 pt-4">
@@ -128,6 +134,13 @@ export function EmptyState() {
           className="text-xs underline underline-offset-4 opacity-70 transition-opacity hover:opacity-100"
           style={{ color: 'var(--gray)', fontFamily: "'Breeze Sans'" }}>
           Reset onboarding (dev)
+        </button>
+
+        <button
+          onClick={onShowPopulated}
+          className="mt-2 text-xs underline underline-offset-4 opacity-70 transition-opacity hover:opacity-100"
+          style={{ color: 'var(--gray)', fontFamily: "'Breeze Sans'" }}>
+          Show populated state (dev)
         </button>
         </div>
       </div>

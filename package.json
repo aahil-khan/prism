@@ -40,6 +40,7 @@
     ],
     "permissions": [
       "tabs",
+      "tabGroups",
       "sidePanel",
       "storage"
     ],
