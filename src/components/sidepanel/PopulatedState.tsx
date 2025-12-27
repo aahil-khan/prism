@@ -293,7 +293,7 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
 
       {/* Content */}
       <div className="flex-1 flex flex-col gap-0 overflow-y-auto">
-        {/* Sticky Search & Filters */}
+        {/* Sticky Search Bar Only */}
         <div className="sticky top-0 z-20 bg-white px-2 pt-4 pb-2 -mx-0">
           {/* Back Button and Search Bar */}
           <div className="flex items-center gap-2 mb-5">
@@ -312,40 +312,42 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
               />
             </div>
           </div>
-
-          {/* Filters Section */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Show first 3 filters or all if expanded */}
-          {MOCK_FILTERS.slice(0, expandFilters ? MOCK_FILTERS.length : 3).map((filter) => (
-            <button
-              key={filter.id}
-              onClick={() => {
-                setSelectedFilter(selectedFilter === filter.id ? null : filter.id)
-              }}
-              className="px-4 py-2 rounded-full text-xs font-medium transition-all"
-              style={{
-                backgroundColor: selectedFilter === filter.id ? '#000000' : '#FFFFFF',
-                color: selectedFilter === filter.id ? '#FFFFFF' : '#000000',
-                border: '1px solid #000000',
-                fontFamily: "'Breeze Sans'",
-              }}>
-              {filter.label}
-            </button>
-          ))}
-
-          {/* More/Less button */}
-          {MOCK_FILTERS.length > 3 && (
-            <button
-              onClick={() => setExpandFilters(!expandFilters)}
-              className="inline-flex items-center gap-1 text-xs font-medium transition-colors ml-auto"
-              style={{ color: '#000000', fontFamily: "'Breeze Sans'" }}>
-              {expandFilters ? "Less" : "More"}
-              <ChevronDown
-                className={`h-3 w-3 transition-transform ${expandFilters ? "rotate-180" : ""}`}
-              />
-            </button>
-          )}
         </div>
+
+        {/* Scrollable Filters Section */}
+        <div className="bg-white px-2 pb-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Show first 3 filters or all if expanded */}
+            {MOCK_FILTERS.slice(0, expandFilters ? MOCK_FILTERS.length : 3).map((filter) => (
+              <button
+                key={filter.id}
+                onClick={() => {
+                  setSelectedFilter(selectedFilter === filter.id ? null : filter.id)
+                }}
+                className="px-4 py-2 rounded-full text-xs font-medium transition-all"
+                style={{
+                  backgroundColor: selectedFilter === filter.id ? '#000000' : '#FFFFFF',
+                  color: selectedFilter === filter.id ? '#FFFFFF' : '#000000',
+                  border: '1px solid #000000',
+                  fontFamily: "'Breeze Sans'",
+                }}>
+                {filter.label}
+              </button>
+            ))}
+
+            {/* More/Less button */}
+            {MOCK_FILTERS.length > 3 && (
+              <button
+                onClick={() => setExpandFilters(!expandFilters)}
+                className="inline-flex items-center gap-1 text-xs font-medium transition-colors ml-auto"
+                style={{ color: '#000000', fontFamily: "'Breeze Sans'" }}>
+                {expandFilters ? "Less" : "More"}
+                <ChevronDown
+                  className={`h-3 w-3 transition-transform ${expandFilters ? "rotate-180" : ""}`}
+                />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Timeline Sessions */}
