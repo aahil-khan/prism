@@ -231,6 +231,43 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
     window.close()
   }
 
+  // Filter sessions based on search query and selected filter
+  const filterSessions = (sessions: typeof MOCK_SESSIONS.today) => {
+    return sessions.filter((session) => {
+      // Apply search filter
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase()
+        const matchesTitle = session.title.toLowerCase().includes(query)
+        const matchesDomain = session.domain.toLowerCase().includes(query)
+        const matchesSiteName = session.siteName.toLowerCase().includes(query)
+        const matchesLinks = session.links.some(
+          (link) =>
+            link.title.toLowerCase().includes(query) ||
+            link.url.toLowerCase().includes(query)
+        )
+        
+        if (!matchesTitle && !matchesDomain && !matchesSiteName && !matchesLinks) {
+          return false
+        }
+      }
+
+      // Apply filter selection
+      if (selectedFilter !== null) {
+        const selectedFilterLabel = MOCK_FILTERS.find(f => f.id === selectedFilter)?.label.toLowerCase() || ""
+        if (!session.domain.toLowerCase().includes(selectedFilterLabel) && 
+            !session.title.toLowerCase().includes(selectedFilterLabel)) {
+          return false
+        }
+      }
+
+      return true
+    })
+  }
+
+  const filteredToday = filterSessions(MOCK_SESSIONS.today)
+  const filteredYesterday = filterSessions(MOCK_SESSIONS.yesterday)
+  const filteredOlder = filterSessions(MOCK_SESSIONS.older)
+
   return (
     <div className="relative h-full flex flex-col" style={{ backgroundColor: '#FFFFFF' }}>
       {/* Header */}
@@ -314,61 +351,77 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
         {/* Timeline Sessions */}
         <div className="flex flex-col p-0.5">
           {/* Today Section */}
-          <DaySection
-            dayKey="today"
-            dayLabel="Today- Friday, December 26, 2025"
-            sessions={MOCK_SESSIONS.today}
-            isExpanded={expandedDays.includes("today")}
-            onToggleDay={(key) => {
-              setExpandedDays((prev) =>
-                prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]
-              )
-            }}
-            expandedSessions={expandedSessions}
-            onToggleSession={(id) => {
-              setExpandedSessions((prev) =>
-                prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
-              )
-            }}
-          />
+          {filteredToday.length > 0 && (
+            <DaySection
+              dayKey="today"
+              dayLabel="Today- Friday, December 26, 2025"
+              sessions={filteredToday}
+              isExpanded={expandedDays.includes("today")}
+              onToggleDay={(key) => {
+                setExpandedDays((prev) =>
+                  prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]
+                )
+              }}
+              expandedSessions={expandedSessions}
+              onToggleSession={(id) => {
+                setExpandedSessions((prev) =>
+                  prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+                )
+              }}
+            />
+          )}
 
           {/* Yesterday Section */}
-          <DaySection
-            dayKey="yesterday"
-            dayLabel="Yesterday - Thursday, December 25, 2025"
-            sessions={MOCK_SESSIONS.yesterday}
-            isExpanded={expandedDays.includes("yesterday")}
-            onToggleDay={(key) => {
-              setExpandedDays((prev) =>
-                prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]
-              )
-            }}
-            expandedSessions={expandedSessions}
-            onToggleSession={(id) => {
-              setExpandedSessions((prev) =>
-                prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
-              )
-            }}
-          />
+          {filteredYesterday.length > 0 && (
+            <DaySection
+              dayKey="yesterday"
+              dayLabel="Yesterday - Thursday, December 25, 2025"
+              sessions={filteredYesterday}
+              isExpanded={expandedDays.includes("yesterday")}
+              onToggleDay={(key) => {
+                setExpandedDays((prev) =>
+                  prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]
+                )
+              }}
+              expandedSessions={expandedSessions}
+              onToggleSession={(id) => {
+                setExpandedSessions((prev) =>
+                  prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+                )
+              }}
+            />
+          )}
 
           {/* Older Section */}
-          <DaySection
-            dayKey="older"
-            dayLabel="📅 DATES +"
-            sessions={MOCK_SESSIONS.older}
-            isExpanded={expandedDays.includes("older")}
-            onToggleDay={(key) => {
-              setExpandedDays((prev) =>
-                prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]
-              )
-            }}
-            expandedSessions={expandedSessions}
-            onToggleSession={(id) => {
-              setExpandedSessions((prev) =>
-                prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
-              )
-            }}
-          />
+          {filteredOlder.length > 0 && (
+            <DaySection
+              dayKey="older"
+              dayLabel="📅 DATES +"
+              sessions={filteredOlder}
+              isExpanded={expandedDays.includes("older")}
+              onToggleDay={(key) => {
+                setExpandedDays((prev) =>
+                  prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]
+                )
+              }}
+              expandedSessions={expandedSessions}
+              onToggleSession={(id) => {
+                setExpandedSessions((prev) =>
+                  prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+                )
+              }}
+            />
+          )}
+
+          {/* Show empty message if no results */}
+          {filteredToday.length === 0 && filteredYesterday.length === 0 && filteredOlder.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-12">
+              <Search className="h-8 w-8 opacity-30 mb-2" style={{ color: '#9A9FA6' }} />
+              <p className="text-sm opacity-60" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
+                No results found
+              </p>
+            </div>
+          )}
         </div>
         
         <button
