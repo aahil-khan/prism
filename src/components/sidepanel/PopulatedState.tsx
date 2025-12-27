@@ -1,6 +1,30 @@
 import { X, Search, ChevronDown, ArrowLeft, ExternalLink, MoreVertical, ExternalLinkIcon, Copy, Trash2, EyeOff } from "lucide-react"
 import { useState, useRef, useEffect } from "react"
 import { KnowledgeGraphIcon } from "../ui/KnowledgeGraphIcon"
+import { KnowledgeGraphPanel } from "./KnowledgeGraphPanel"
+
+// Style constants
+const COLORS = {
+  dark: 'var(--dark)',
+  gray: 'var(--gray)',
+  primary: 'var(--primary)',
+  lightGray: '#9A9FA6',
+  darkText: '#080A0B',
+  linkBlue: '#0072DF',
+  borderGray: '#E5E5E5',
+  bgLight: '#F5F5F5',
+  bgBorder: '#BCBCBC',
+}
+
+const FONT_FAMILY = "'Breeze Sans'"
+
+const COMMON_STYLES = {
+  text: { fontFamily: FONT_FAMILY, color: COLORS.darkText },
+  dimText: { fontFamily: FONT_FAMILY, color: COLORS.lightGray },
+  linkText: { fontFamily: FONT_FAMILY, color: COLORS.linkBlue },
+  darkHeading: { fontFamily: FONT_FAMILY, color: COLORS.dark },
+  icon: { color: COLORS.lightGray },
+}
 
 // Mock filter data - will be fetched from API
 const MOCK_FILTERS = [
@@ -222,6 +246,7 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
   const [selectedFilter, setSelectedFilter] = useState<number | null>(null)
   const [expandedDays, setExpandedDays] = useState<string[]>(["today"])
   const [expandedSessions, setExpandedSessions] = useState<number[]>([])
+  const [isKnowledgeGraphOpen, setIsKnowledgeGraphOpen] = useState(false)
 
   const handleClose = () => {
     // Send message to content scripts before closing
@@ -272,21 +297,19 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
   return (
     <div className="relative h-full flex flex-col" style={{ backgroundColor: '#FFFFFF' }}>
       {/* Header */}
-      <div className="sticky top-0 z-10 flex items-center justify-between p-6 border-b bg-white" style={{ borderColor: '#E5E5E5' }}>
+      <div className="sticky top-0 z-10 flex items-center justify-between p-6 border-b bg-white" style={{ borderColor: COLORS.borderGray }}>
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg flex-shrink-0" style={{ backgroundColor: 'var(--primary)' }} />
-          <h1 
-            className="text-xl font"
-            style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+          <div className="w-8 h-8 rounded-lg flex-shrink-0" style={{ backgroundColor: COLORS.primary }} />
+          <h1 className="text-xl font" style={COMMON_STYLES.darkHeading}>
             Aegis
           </h1>
         </div>
         
         {/* Knowledge Graph Button */}
         <button
-          onClick={() => {}}
+          onClick={() => setIsKnowledgeGraphOpen(true)}
           className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none"
-          style={{ color: 'var(--gray)' }}>
+          style={{ color: COLORS.gray }}>
           <KnowledgeGraphIcon className="h-5 w-5" />
           <span className="sr-only">Knowledge Graph</span>
         </button>
@@ -298,18 +321,18 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
         <div className="sticky top-0 z-20 bg-white px-2 pt-4 pb-2 -mx-0">
           {/* Back Button and Search Bar */}
           <div className="flex items-center gap-2 mb-5">
-            <button className="p-2" onClick={onShowEmpty} style={{ color: '#9A9FA6' }}>
+            <button className="p-2" onClick={onShowEmpty} style={COMMON_STYLES.icon}>
               <ArrowLeft className="h-4 w-4" />
             </button>
-            <div className="relative flex items-center gap-3 px-4 py-2.5 rounded-full flex-1" style={{ backgroundColor: '#F5F5F5' }}>
-              <Search className="h-4 w-4" style={{ color: '#9A9FA6' }} />
+            <div className="relative flex items-center gap-3 px-4 py-2.5 rounded-full flex-1" style={{ backgroundColor: COLORS.bgLight }}>
+              <Search className="h-4 w-4" style={COMMON_STYLES.icon} />
               <input
                 type="text"
                 placeholder="Search what you have seen before"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="flex-1 bg-transparent outline-none text-sm"
-                style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}
+                style={COMMON_STYLES.text}
               />
             </div>
           </div>
@@ -330,7 +353,7 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
                   backgroundColor: selectedFilter === filter.id ? '#000000' : '#FFFFFF',
                   color: selectedFilter === filter.id ? '#FFFFFF' : '#000000',
                   border: '1px solid #000000',
-                  fontFamily: "'Breeze Sans'",
+                  fontFamily: FONT_FAMILY,
                 }}>
                 {filter.label}
               </button>
@@ -341,7 +364,7 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
               <button
                 onClick={() => setExpandFilters(!expandFilters)}
                 className="inline-flex items-center gap-1 text-xs font-medium transition-colors ml-auto"
-                style={{ color: '#000000', fontFamily: "'Breeze Sans'" }}>
+                style={{ color: '#000000', fontFamily: FONT_FAMILY }}>
                 {expandFilters ? "Less" : "More"}
                 <ChevronDown
                   className={`h-3 w-3 transition-transform ${expandFilters ? "rotate-180" : ""}`}
@@ -419,8 +442,8 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
           {/* Show empty message if no results */}
           {filteredToday.length === 0 && filteredYesterday.length === 0 && filteredOlder.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12">
-              <Search className="h-8 w-8 opacity-30 mb-2" style={{ color: '#9A9FA6' }} />
-              <p className="text-sm opacity-60" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
+              <Search className="h-8 w-8 opacity-30 mb-2" style={COMMON_STYLES.icon} />
+              <p className="text-sm opacity-60" style={COMMON_STYLES.dimText}>
                 No results found
               </p>
             </div>
@@ -430,10 +453,15 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
         <button
           onClick={onShowEmpty}
           className="mt-4 text-xs underline underline-offset-4 opacity-70 transition-opacity hover:opacity-100"
-          style={{ color: 'var(--gray)', fontFamily: "'Breeze Sans'" }}>
+          style={{ color: COLORS.gray, fontFamily: FONT_FAMILY }}>
           Show empty state (dev)
         </button>
       </div>
+      
+      <KnowledgeGraphPanel 
+        isOpen={isKnowledgeGraphOpen} 
+        onClose={() => setIsKnowledgeGraphOpen(false)} 
+      />
     </div>
   )
 }
@@ -467,7 +495,7 @@ function DaySection({
   return (
     <div className="flex flex-col gap-3 pb-0 pt-1 p-2">
       {/* Day Header */}
-      <div className="text-sm font-normal px-2 mb-2" style={{ color: '#0072DF', fontFamily: "'Breeze Sans'" }}>
+      <div className="text-sm font-normal px-2 mb-2" style={COMMON_STYLES.linkText}>
         <span>{dayLabel}</span>
       </div>
 
@@ -544,15 +572,13 @@ function SessionItem({ session, isExpanded, onToggle }: SessionItemProps) {
       onClick={onToggle}
       className="flex flex-col gap-1.5 p-3 rounded-xl transition-all cursor-pointer"
       style={{ 
-        backgroundColor: isExpanded ? '#F5F5F5' : '#FFFFFF',
-        border: '1px solid #BCBCBC'
+        backgroundColor: isExpanded ? COLORS.bgLight : '#FFFFFF',
+        border: `1px solid ${COLORS.bgBorder}`
       }}>
       {/* Session Header */}
       <div className="flex items-center gap-2 w-full">
         <div className="flex items-center gap-3 flex-1">
-          <p
-            className="text-sm font-medium leading-tight"
-            style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+          <p className="text-sm font-medium leading-tight" style={COMMON_STYLES.darkHeading}>
             {session.title}
           </p>
           {/* Reload Session Icon */}
@@ -579,7 +605,7 @@ function SessionItem({ session, isExpanded, onToggle }: SessionItemProps) {
               }
             }}
             className="p-1 hover:bg-gray-100 rounded transition-colors"
-            style={{ color: '#9A9FA6' }}>
+            style={COMMON_STYLES.icon}>
             <ExternalLink className="h-4 w-4" />
           </button>
         </div>
@@ -589,7 +615,7 @@ function SessionItem({ session, isExpanded, onToggle }: SessionItemProps) {
           className="p-1 hover:bg-gray-100 rounded transition-colors">
           <ChevronDown
             className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
-            style={{ color: '#9A9FA6' }}
+            style={COMMON_STYLES.icon}
           />
         </button>
       </div>
@@ -612,18 +638,18 @@ function SessionItem({ session, isExpanded, onToggle }: SessionItemProps) {
                       setOpenMenuIndex(openMenuIndex === index ? null : index)
                     }}
                     className="hover:bg-gray-200 rounded p-0.5 transition-colors">
-                    <MoreVertical className="h-3.5 w-3.5" style={{ color: '#9A9FA6' }} />
+                    <MoreVertical className="h-3.5 w-3.5" style={COMMON_STYLES.icon} />
                   </button>
                   <a
                     href={`https://${link.url}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs leading-tight truncate flex-1"
-                    style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+                    style={COMMON_STYLES.text}>
                     {link.title}
                   </a>
                 </div>
-                <span className="text-xs flex-shrink-0" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
+                <span className="text-xs flex-shrink-0" style={COMMON_STYLES.dimText}>
                   {timeStr}
                 </span>
 
@@ -632,7 +658,7 @@ function SessionItem({ session, isExpanded, onToggle }: SessionItemProps) {
                   <div
                     className="absolute left-6 top-6 z-30 bg-white rounded-xl py-2 min-w-[200px]"
                     style={{ 
-                      border: '1px solid #E5E5E5',
+                      border: `1px solid ${COLORS.borderGray}`,
                       boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)'
                     }}
                     onClick={(e) => e.stopPropagation()}>
@@ -642,8 +668,8 @@ function SessionItem({ session, isExpanded, onToggle }: SessionItemProps) {
                         setOpenMenuIndex(null)
                       }}
                       className="w-full text-left px-4 py-2 text-xs hover:bg-gray-50 transition-colors flex items-center gap-3"
-                      style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
-                      <ExternalLinkIcon className="h-3.5 w-3.5" style={{ color: '#9A9FA6' }} />
+                      style={COMMON_STYLES.text}>
+                      <ExternalLinkIcon className="h-3.5 w-3.5" style={COMMON_STYLES.icon} />
                       <span>Open in new tab</span>
                     </button>
                     <button
@@ -652,8 +678,8 @@ function SessionItem({ session, isExpanded, onToggle }: SessionItemProps) {
                         setOpenMenuIndex(null)
                       }}
                       className="w-full text-left px-4 py-2 text-xs hover:bg-gray-50 transition-colors flex items-center gap-3"
-                      style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
-                      <ExternalLinkIcon className="h-3.5 w-3.5" style={{ color: '#9A9FA6' }} />
+                      style={COMMON_STYLES.text}>
+                      <ExternalLinkIcon className="h-3.5 w-3.5" style={COMMON_STYLES.icon} />
                       <span>Open in new window</span>
                     </button>
                     <button
@@ -662,11 +688,11 @@ function SessionItem({ session, isExpanded, onToggle }: SessionItemProps) {
                         setOpenMenuIndex(null)
                       }}
                       className="w-full text-left px-4 py-2 text-xs hover:bg-gray-50 transition-colors flex items-center gap-3"
-                      style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
-                      <Copy className="h-3.5 w-3.5" style={{ color: '#9A9FA6' }} />
+                      style={COMMON_STYLES.text}>
+                      <Copy className="h-3.5 w-3.5" style={COMMON_STYLES.icon} />
                       <span>Copy link</span>
                     </button>
-                    <div className="h-px mx-2 my-1" style={{ backgroundColor: '#E5E5E5' }} />
+                    <div className="h-px mx-2 my-1" style={{ backgroundColor: COLORS.borderGray }} />
                     <button
                       onClick={() => {
                         // Delete functionality would be implemented here
@@ -674,8 +700,8 @@ function SessionItem({ session, isExpanded, onToggle }: SessionItemProps) {
                         setOpenMenuIndex(null)
                       }}
                       className="w-full text-left px-4 py-2 text-xs hover:bg-red-50 transition-colors flex items-center gap-3"
-                      style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
-                      <Trash2 className="h-3.5 w-3.5" style={{ color: '#9A9FA6' }} />
+                      style={COMMON_STYLES.text}>
+                      <Trash2 className="h-3.5 w-3.5" style={COMMON_STYLES.icon} />
                       <span>Delete from session</span>
                     </button>
                     <button
@@ -684,8 +710,8 @@ function SessionItem({ session, isExpanded, onToggle }: SessionItemProps) {
                         setOpenMenuIndex(null)
                       }}
                       className="w-full text-left px-4 py-2 text-xs hover:bg-gray-50 transition-colors flex items-center gap-3"
-                      style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
-                      <EyeOff className="h-3.5 w-3.5" style={{ color: '#9A9FA6' }} />
+                      style={COMMON_STYLES.text}>
+                      <EyeOff className="h-3.5 w-3.5" style={COMMON_STYLES.icon} />
                       <span>Open in incognito</span>
                     </button>
                   </div>

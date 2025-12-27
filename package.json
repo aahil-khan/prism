@@ -15,6 +15,7 @@
     "@radix-ui/react-dialog": "^1.1.15",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "force-graph": "^1.51.0",
     "lottie-web": "^5.13.0",
     "lucide-react": "^0.562.0",
     "plasmo": "0.90.5",
