@@ -1,5 +1,6 @@
-import { X, Search, ChevronDown, Settings, ArrowLeft, ExternalLink, MoreVertical, ExternalLinkIcon, Copy, Trash2, EyeOff } from "lucide-react"
+import { X, Search, ChevronDown, ArrowLeft, ExternalLink, MoreVertical, ExternalLinkIcon, Copy, Trash2, EyeOff } from "lucide-react"
 import { useState, useRef, useEffect } from "react"
+import { KnowledgeGraphIcon } from "../ui/KnowledgeGraphIcon"
 
 // Mock filter data - will be fetched from API
 const MOCK_FILTERS = [
@@ -281,13 +282,13 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
           </h1>
         </div>
         
-        {/* Settings Button */}
+        {/* Knowledge Graph Button */}
         <button
           onClick={() => {}}
           className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none"
           style={{ color: 'var(--gray)' }}>
-          <Settings className="h-5 w-5" />
-          <span className="sr-only">Settings</span>
+          <KnowledgeGraphIcon className="h-5 w-5" />
+          <span className="sr-only">Knowledge Graph</span>
         </button>
       </div>
 
