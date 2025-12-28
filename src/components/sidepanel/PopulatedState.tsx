@@ -1,5 +1,7 @@
 import { X, Search, ChevronDown } from "lucide-react"
-import { useState, useRef } from "react"
+import { useEffect, useMemo, useState, useRef } from "react"
+import type { PageEvent } from "~/types/page-event"
+import type { Session } from "~/types/session"
 
 // Mock filter data - will be fetched from API
 const MOCK_FILTERS = [
@@ -211,16 +213,133 @@ const MOCK_SESSIONS = {
   ],
 }
 
+type SearchResult = {
+  pageEvent: PageEvent
+  score: number
+  layer: "ML" | "Semantic" | "Keyword"
+}
+
+async function sendMessage<T>(message: any): Promise<T> {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(message, (response) => {
+      const err = chrome.runtime.lastError
+      if (err) {
+        reject(err)
+      } else {
+        resolve(response as T)
+      }
+    })
+  })
+}
+
 interface PopulatedStateProps {
   onShowEmpty?: () => void
 }
 
 export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
+  const [sessions, setSessions] = useState<Session[]>([])
+  const [results, setResults] = useState<SearchResult[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [expandFilters, setExpandFilters] = useState(false)
   const [selectedFilter, setSelectedFilter] = useState<number | null>(null)
   const [expandedDays, setExpandedDays] = useState<string[]>(["today"])
-  const [expandedSessions, setExpandedSessions] = useState<number[]>([])
+  const [expandedSessions, setExpandedSessions] = useState<string[]>([])
+
+  useEffect(() => {
+    sendMessage<{ sessions: Session[] }>({ type: "GET_SESSIONS" })
+      .then((res) => {
+        setSessions(res?.sessions ?? [])
+      })
+      .catch((err) => {
+        console.error("Failed to load sessions:", err)
+        setError("Failed to load sessions")
+      })
+  }, [])
+
+  const pages = useMemo(() => {
+    return sessions.flatMap((s) => s.pages)
+  }, [sessions])
+
+  // Group real sessions by date
+  const realSessionsByDay = useMemo(() => {
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
+
+    const grouped: { today: Session[]; yesterday: Session[]; older: Session[] } = {
+      today: [],
+      yesterday: [],
+      older: [],
+    }
+
+    sessions.forEach((session) => {
+      const sessionDate = new Date(session.startTime)
+      const sessionDay = new Date(sessionDate.getFullYear(), sessionDate.getMonth(), sessionDate.getDate())
+
+      if (sessionDay.getTime() === today.getTime()) {
+        grouped.today.push(session)
+      } else if (sessionDay.getTime() === yesterday.getTime()) {
+        grouped.yesterday.push(session)
+      } else {
+        grouped.older.push(session)
+      }
+    })
+
+    return grouped
+  }, [sessions])
+
+  const searchMock = (value: string): SearchResult[] => {
+    const term = value.toLowerCase()
+    return Object.values(MOCK_SESSIONS)
+      .flat()
+      .flatMap((session) => session.links.map((link) => ({ sessionTitle: session.title, link })))
+      .filter(({ sessionTitle, link }) =>
+        sessionTitle.toLowerCase().includes(term) || link.title.toLowerCase().includes(term) || link.url.toLowerCase().includes(term)
+      )
+      .map(({ link }) => ({
+        pageEvent: {
+          url: `https://${link.url}`,
+          title: link.title,
+          domain: new URL(`https://${link.url}`).hostname,
+          timestamp: Date.now(),
+          openedAt: Date.now()
+        },
+        score: 0.5,
+        layer: "Keyword" as const
+      }))
+  }
+
+  const handleSearch = async (value: string) => {
+    setSearchQuery(value)
+    if (!value.trim()) {
+      setResults([])
+      return
+    }
+
+    // If no real sessions yet, fall back to mock search
+    if (!pages.length) {
+      setResults(searchMock(value))
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await sendMessage<{ results: SearchResult[] }>({
+        type: "SEARCH_QUERY",
+        payload: { query: value }
+      })
+      setResults(res?.results ?? [])
+    } catch (err) {
+      console.error("Search failed:", err)
+      setError("Search failed")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleClose = () => {
     // Send message to content scripts before closing
@@ -229,6 +348,29 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
     // Also set localStorage as fallback
     localStorage.setItem("aegis-sidebar-closed", "true")
     window.close()
+  }
+
+  const MAX_OPEN_TABS = 10
+  const openAllResults = () => {
+    if (!results.length) return
+    const count = results.length
+    const toOpen = results.slice(0, MAX_OPEN_TABS)
+    const needsConfirm = count > MAX_OPEN_TABS
+    if (needsConfirm) {
+      const ok = window.confirm(
+        `Open ${count} tabs? For safety, only the first ${MAX_OPEN_TABS} will be opened.`
+      )
+      if (!ok) return
+    }
+    toOpen.forEach(({ pageEvent }) => {
+      const raw = pageEvent.url || ""
+      const url = raw.startsWith("http") ? raw : `https://${raw}`
+      try {
+        chrome.tabs.create({ url })
+      } catch (e) {
+        console.error("Failed to open tab:", url, e)
+      }
+    })
   }
 
   return (
@@ -265,11 +407,21 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
               type="text"
               placeholder="Search sessions..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => handleSearch(e.target.value)}
               className="flex-1 bg-transparent outline-none text-sm"
               style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}
             />
           </div>
+
+          <div className="flex items-center justify-between px-1 text-xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
+            <span>{pages.length} pages indexed{!pages.length ? " (using mock fallback)" : ""}</span>
+            {loading && <span>Searching...</span>}
+          </div>
+          {error && (
+            <div className="mt-1 px-2 text-xs" style={{ color: '#b00020', fontFamily: "'Breeze Sans'" }}>
+              {error}
+            </div>
+          )}
 
           {/* Filters Section */}
         <div className="flex flex-wrap items-center gap-2">
@@ -305,65 +457,109 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
         </div>
         </div>
 
-        {/* Timeline Sessions */}
-        <div className="flex flex-col p-0.5">
-          {/* Today Section */}
-          <DaySection
-            dayKey="today"
-            dayLabel="Today"
-            sessions={MOCK_SESSIONS.today}
-            isExpanded={expandedDays.includes("today")}
-            onToggleDay={(key) => {
-              setExpandedDays((prev) =>
-                prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]
+        {/* Search Results or Timeline */}
+        {searchQuery.trim() ? (
+          <div className="flex flex-col gap-2 p-2">
+            {results.length > 0 && (
+              <div className="flex items-center justify-end pb-1">
+                <button
+                  onClick={openAllResults}
+                  className="px-3 py-1 rounded-md text-xs font-medium transition-colors"
+                  style={{ backgroundColor: '#0074FB', color: 'white', fontFamily: "'Breeze Sans'" }}
+                >
+                  Open all ({Math.min(results.length, MAX_OPEN_TABS)}/{results.length})
+                </button>
+              </div>
+            )}
+            {results.length === 0 && !loading && (
+              <div className="text-sm px-2" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
+                No results found.
+              </div>
+            )}
+            {results.map((item, idx) => {
+              const { pageEvent, score, layer } = item
+              const opened = pageEvent.openedAt || pageEvent.timestamp
+              const openedText = new Date(opened).toLocaleString()
+              return (
+                <div
+                  key={`${pageEvent.url}-${opened}-${idx}`}
+                  className="flex flex-col gap-1 p-2 rounded-lg"
+                  style={{ backgroundColor: '#FAFAFA', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm font-semibold truncate" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+                      {pageEvent.title || pageEvent.url}
+                    </div>
+                    <span className="text-2xs px-2 py-0.5 rounded" style={{ backgroundColor: '#E8E8E8', color: '#555', fontSize: '10px' }}>
+                      {layer} {score ? `• ${score.toFixed(3)}` : ""}
+                    </span>
+                  </div>
+                  <div className="text-xs truncate" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
+                    {pageEvent.url}
+                  </div>
+                  <div className="text-2xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
+                    Opened: {openedText}
+                  </div>
+                </div>
               )
-            }}
-            expandedSessions={expandedSessions}
-            onToggleSession={(id) => {
-              setExpandedSessions((prev) =>
-                prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
-              )
-            }}
-          />
+            })}
+          </div>
+        ) : (
+          <div className="flex flex-col p-0.5">
+            <RealDaySection
+              dayKey="today"
+              dayLabel="Today"
+              sessions={realSessionsByDay.today}
+              isExpanded={expandedDays.includes("today")}
+              onToggleDay={(key) => {
+                setExpandedDays((prev) =>
+                  prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]
+                )
+              }}
+              expandedSessions={expandedSessions}
+              onToggleSession={(id) => {
+                setExpandedSessions((prev) =>
+                  prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+                )
+              }}
+            />
 
-          {/* Yesterday Section */}
-          <DaySection
-            dayKey="yesterday"
-            dayLabel="Yesterday"
-            sessions={MOCK_SESSIONS.yesterday}
-            isExpanded={expandedDays.includes("yesterday")}
-            onToggleDay={(key) => {
-              setExpandedDays((prev) =>
-                prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]
-              )
-            }}
-            expandedSessions={expandedSessions}
-            onToggleSession={(id) => {
-              setExpandedSessions((prev) =>
-                prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
-              )
-            }}
-          />
+            <RealDaySection
+              dayKey="yesterday"
+              dayLabel="Yesterday"
+              sessions={realSessionsByDay.yesterday}
+              isExpanded={expandedDays.includes("yesterday")}
+              onToggleDay={(key) => {
+                setExpandedDays((prev) =>
+                  prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]
+                )
+              }}
+              expandedSessions={expandedSessions}
+              onToggleSession={(id) => {
+                setExpandedSessions((prev) =>
+                  prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+                )
+              }}
+            />
 
-          {/* Older Section */}
-          <DaySection
-            dayKey="older"
-            dayLabel="📅 DATES +"
-            sessions={MOCK_SESSIONS.older}
-            isExpanded={expandedDays.includes("older")}
-            onToggleDay={(key) => {
-              setExpandedDays((prev) =>
-                prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]
-              )
-            }}
-            expandedSessions={expandedSessions}
-            onToggleSession={(id) => {
-              setExpandedSessions((prev) =>
-                prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
-              )
-            }}
-          />
-        </div>
+            <RealDaySection
+              dayKey="older"
+              dayLabel="📅 DATES +"
+              sessions={realSessionsByDay.older}
+              isExpanded={expandedDays.includes("older")}
+              onToggleDay={(key) => {
+                setExpandedDays((prev) =>
+                  prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]
+                )
+              }}
+              expandedSessions={expandedSessions}
+              onToggleSession={(id) => {
+                setExpandedSessions((prev) =>
+                  prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+                )
+              }}
+            />
+          </div>
+        )}
         
         <button
           onClick={onShowEmpty}
@@ -372,6 +568,137 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
           Show empty state (dev)
         </button>
       </div>
+    </div>
+  )
+}
+
+// Real Day Section Component (for actual sessions from IndexedDB)
+interface RealDaySectionProps {
+  dayKey: string
+  dayLabel: string
+  sessions: Session[]
+  isExpanded: boolean
+  onToggleDay: (key: string) => void
+  expandedSessions: string[]
+  onToggleSession: (id: string) => void
+}
+
+function RealDaySection({
+  dayKey,
+  dayLabel,
+  sessions,
+  isExpanded,
+  onToggleDay,
+  expandedSessions,
+  onToggleSession,
+}: RealDaySectionProps) {
+  const visibleCount = isExpanded ? sessions.length : 3
+
+  return (
+    <div className="flex flex-col gap-3 pb-0 pt-1 p-2">
+      {/* Day Header */}
+      <div className="text-sm font-semibold px-2" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+        <span>{dayLabel}</span>
+      </div>
+
+      {/* Sessions List */}
+      <div className="flex flex-col gap-3 pt-0">
+        {sessions.slice(0, visibleCount).map((session, index) => (
+          <div
+            key={session.id}
+            className="animate-in fade-in slide-in-from-bottom-2 duration-300"
+            style={{ animationDelay: `${index * 50}ms` }}>
+            <RealSessionItem
+              session={session}
+              isExpanded={expandedSessions.includes(session.id)}
+              onToggle={() => onToggleSession(session.id)}
+            />
+          </div>
+        ))}
+        {sessions.length > 3 && (
+          <button
+            onClick={() => onToggleDay(dayKey)}
+            className="text-xs font-medium self-end px-3 py-0.5 rounded-lg transition-all hover:opacity-70 hover:scale-105"
+            style={{
+              color: 'var(--primary)',
+              fontFamily: "'Breeze Sans'",
+              backgroundColor: 'transparent'
+            }}>
+            {isExpanded ? "Less" : "More"}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Real Session Item Component (for actual sessions from IndexedDB)
+interface RealSessionItemProps {
+  session: Session
+  isExpanded: boolean
+  onToggle: () => void
+}
+
+function RealSessionItem({ session, isExpanded, onToggle }: RealSessionItemProps) {
+  const timeStart = new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const timeEnd = new Date(session.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const domains = [...new Set(session.pages.map((p) => new URL(p.url).hostname.replace('www.', '')))].slice(0, 3)
+
+  return (
+    <div
+      className="flex flex-col gap-1.5 p-2.5 rounded-lg transition-all"
+      style={{
+        backgroundColor: '#FAFAFA',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+      }}>
+      {/* Row 1: Session Header with title and duration */}
+      <button
+        onClick={onToggle}
+        className="flex items-center justify-between gap-2 w-full">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <ChevronDown
+            className={`h-3 w-3 flex-shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+            style={{ color: 'var(--gray)' }}
+          />
+          <p
+            className="text-xs font-bold leading-tight"
+            style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+            Session {session.pages.length} pages
+          </p>
+        </div>
+        <span className="text-xs flex-shrink-0" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
+          {timeStart} - {timeEnd}
+        </span>
+      </button>
+
+      {/* Row 2: Domains (only show when collapsed) */}
+      {!isExpanded && (
+        <div className="flex items-center gap-1.5 px-5">
+          {domains.map((domain) => (
+            <span
+              key={domain}
+              className="text-2xs px-2 py-1 rounded"
+              style={{ backgroundColor: '#E8E8E8', color: '#555', fontSize: '10px', fontFamily: "'Breeze Sans'" }}>
+              {domain}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Expanded: Show pages */}
+      {isExpanded && (
+        <div className="flex flex-col gap-1 border-t border-gray-200 pt-2">
+          {session.pages.map((page) => (
+            <div key={page.url} className="px-5 py-1 text-2xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
+              <div className="font-medium truncate" style={{ color: 'var(--dark)' }}>{page.title}</div>
+              <div className="truncate">{page.url}</div>
+              {page.visitCount && page.visitCount > 1 && (
+                <div style={{ color: '#0074FB' }}>Visited {page.visitCount} times</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

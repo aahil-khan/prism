@@ -7,6 +7,8 @@ import {
 } from "./sidepanel-listeners"
 import { setupConsentListener } from "./consent-listener"
 import { getSessions, initializeSessions } from "./sessionManager"
+import { executeSearch } from "./search-coordinator"
+import { logSearchResults } from "~/lib/search-explainer"
 import {
   incrementTabSwitch,
   updateScrollDepth,
@@ -42,6 +44,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "GET_SESSIONS") {
     const sessions = getSessions()
     sendResponse({ sessions })
+    return true
+  }
+
+  if (message.type === "SEARCH_QUERY") {
+    const query = message.payload?.query ?? ""
+    const sessions = getSessions()
+    const start = performance.now()
+
+    executeSearch(query, sessions)
+      .then((results) => {
+        const elapsed = performance.now() - start
+        logSearchResults(query, results, elapsed)
+        sendResponse({ results })
+      })
+      .catch((error) => {
+        console.error("SEARCH_QUERY failed:", error)
+        sendResponse({ results: [] })
+      })
+
     return true
   }
 

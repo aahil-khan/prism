@@ -74,9 +74,28 @@ export async function processPageEvent(pageEvent: PageEvent): Promise<void> {
       sessions.push(newSession)
       checkSessionChange(newSession.id)
     } else {
-      // Append to existing session
-      lastSession.pages.push(pageEvent)
-      lastSession.endTime = pageEvent.timestamp
+      // Deduplicate by URL within the current session: update existing entry instead of adding
+      const existingIndex = lastSession.pages.findIndex((p) => p.url === pageEvent.url)
+      if (existingIndex !== -1) {
+        const existing = lastSession.pages[existingIndex]
+        existing.title = pageEvent.title || existing.title
+        existing.timestamp = pageEvent.timestamp
+        existing.visitCount = (existing.visitCount ?? 1) + 1
+        // Prefer keeping the earliest openedAt
+        existing.openedAt = Math.min(existing.openedAt || pageEvent.openedAt, pageEvent.openedAt)
+        // If the new event has an embedding and existing doesn't, adopt it
+        if (!existing.titleEmbedding && pageEvent.titleEmbedding) {
+          existing.titleEmbedding = pageEvent.titleEmbedding
+        }
+        // Move the updated page to the end to reflect recency
+        lastSession.pages.splice(existingIndex, 1)
+        lastSession.pages.push(existing)
+        lastSession.endTime = pageEvent.timestamp
+      } else {
+        // Append as new entry, initialize visitCount
+        lastSession.pages.push({ ...pageEvent, visitCount: 1 })
+        lastSession.endTime = pageEvent.timestamp
+      }
     }
   }
 

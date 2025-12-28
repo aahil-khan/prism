@@ -13,6 +13,7 @@ const capturePageVisit = () => {
     title: document.title,
     domain: location.hostname,
     timestamp: Date.now(),
+    openedAt: Date.now(),
     wasForeground: document.visibilityState === "visible",
     referrer: document.referrer || undefined
   }
