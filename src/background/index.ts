@@ -15,6 +15,7 @@ import {
   incrementScrollBurst,
   getBehaviorState
 } from "./ephemeralBehavior"
+import { computePageCoi, computeSessionCoi, loadCoiWeights } from "~/lib/coi"
 
 // Initialize sessions from IndexedDB on startup
 initializeSessions().then(() => {
@@ -30,12 +31,14 @@ setupOpenSidepanelListener()
 // Track tab switches
 chrome.tabs.onActivated.addListener(() => {
   incrementTabSwitch()
+  broadcastCoiUpdate()
 })
 
 // Track window focus changes (also counts as tab switch)
 chrome.windows.onFocusChanged.addListener((windowId) => {
   if (windowId !== chrome.windows.WINDOW_ID_NONE) {
     incrementTabSwitch()
+    broadcastCoiUpdate()
   }
 })
 
@@ -74,11 +77,44 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === "SCROLL_DEPTH_UPDATE") {
     updateScrollDepth(message.payload.bucket)
+    broadcastCoiUpdate()
   }
 
   if (message.type === "SCROLL_BURST_DETECTED") {
     incrementScrollBurst()
+    broadcastCoiUpdate()
   }
 })
+
+// Periodic broadcaster to capture dwell/idle changes
+setInterval(() => {
+  broadcastCoiUpdate()
+}, 5000)
+
+async function broadcastCoiUpdate() {
+  try {
+    const sessions = getSessions()
+    const latest = sessions[sessions.length - 1]
+    const behavior = getBehaviorState()
+    if (!latest) return
+
+    const weights = await loadCoiWeights()
+    const sessionCoi = computeSessionCoi(latest, behavior, weights)
+    const pageIndex = Math.max(0, latest.pages.length - 1)
+    const pageCoi = computePageCoi(latest, pageIndex, behavior, weights)
+
+    chrome.runtime.sendMessage({
+      type: "COI_UPDATE",
+      payload: {
+        session: sessionCoi,
+        page: pageCoi,
+        pageTitle: latest.pages[pageIndex]?.title,
+        pageIndex,
+      },
+    })
+  } catch (err) {
+    console.warn("Failed to broadcast COI update", err)
+  }
+}
 
 export {}

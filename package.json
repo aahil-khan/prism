@@ -46,7 +46,8 @@
       "tabs",
       "tabGroups",
       "sidePanel",
-      "storage"
+      "storage",
+      "notifications"
     ],
     "side_panel": {
       "default_path": "sidepanel.html"

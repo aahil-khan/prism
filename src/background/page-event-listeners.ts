@@ -1,6 +1,7 @@
 import { processPageEvent, getSessions } from "./sessionManager"
 import { getBehaviorState } from "./ephemeralBehavior"
 import { generateEmbedding } from "./embedding-engine"
+import { checkAndNotifySimilarPages } from "./similarity-notifier"
 
 // Listen for PAGE_VISITED events from content script
 export const setupPageVisitListener = () => {
@@ -40,10 +41,17 @@ export const setupPageVisitListener = () => {
           }
 
           await processPageEvent(baseEvent)
+
+          // Check for and notify about similar pages (pass sender tab ID)
+          const tabId = sender.tab?.id
+          await checkAndNotifySimilarPages(baseEvent, tabId)
         } catch (error) {
           console.error("Failed to process page event:", error)
         }
       })()
+
+      // Keep the message channel open for async work to avoid back/forward cache warnings
+      return true
     }
   })
 }

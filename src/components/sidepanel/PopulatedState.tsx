@@ -2,6 +2,7 @@ import { X, Search, ChevronDown } from "lucide-react"
 import { useEffect, useMemo, useState, useRef } from "react"
 import type { PageEvent } from "~/types/page-event"
 import type { Session } from "~/types/session"
+import { CoiPanel } from "./CoiPanel"
 
 // Mock filter data - will be fetched from API
 const MOCK_FILTERS = [
@@ -394,6 +395,10 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
           <X className="h-5 w-5" />
           <span className="sr-only">Close</span>
         </button>
+      </div>
+
+      <div className="px-3 pt-2">
+        <CoiPanel sessions={sessions} />
       </div>
 
       {/* Content */}
