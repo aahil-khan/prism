@@ -104,8 +104,13 @@ const ConsentOverlay = () => {
             id="consent"
             checked={agreed}
             onChange={(e) => setAgreed(e.target.checked)}
-            className="mt-0.5 w-[18px] h-[18px] cursor-pointer flex-shrink-0 bg-white border-2 rounded"
-            style={{ accentColor: '#0072de' }}
+            className="mt-0.5 w-[18px] h-[18px] cursor-pointer flex-shrink-0 bg-white border-2 rounded appearance-none checked:bg-[#0072de] checked:border-[#0072de]"
+            style={{ 
+              backgroundImage: agreed ? 'url("data:image/svg+xml,%3csvg viewBox=\'0 0 16 16\' fill=\'white\' xmlns=\'http://www.w3.org/2000/svg\'%3e%3cpath d=\'M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z\'/%3e%3c/svg%3e")' : 'none',
+              backgroundSize: '100% 100%',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat'
+            }}
           />
           <label htmlFor="consent" className="text-sm cursor-pointer leading-normal" style={{ color: '#080A0B' }}>
             I understand that browsing context is stored locally on this device
@@ -160,64 +165,65 @@ const ConsentOverlay = () => {
             ×
           </button>
 
-          <h2 className="text-2xl font-semibold mb-6" style={{ color: '#080A0B' }}>
+          <h2 className="text-xl font-semibold mb-6 pb-3" style={{ color: '#080A0B', borderBottom: '2px solid rgba(0, 114, 223, 0.3)' }}>
             Learn More
           </h2>
 
           {/* What is stored? */}
           <div className="mb-6">
-            <h3 className="text-lg font-semibold mb-2" style={{ color: '#080A0B' }}>
+            <h3 className="text-sm font-semibold mb-2" style={{ color: '#080A0B' }}>
               What is stored?
             </h3>
             <p className="text-sm mb-2" style={{ color: '#080A0B' }}>
               Aegis saves browsing context, not content.
             </p>
-            <ul className="space-y-1 ml-4">
-              <li className="text-sm" style={{ color: '#0072de' }}>Page titles and domains</li>
-              <li className="text-sm" style={{ color: '#0072de' }}>Time spent during a session</li>
-              <li className="text-sm" style={{ color: '#0072de' }}>Tab and navigation patterns</li>
+            <ul className="space-y-1 ml-4 list-disc">
+              <li className="text-sm" style={{ color: '#9A9FA6' }}>Page titles and domains</li>
+              <li className="text-sm" style={{ color: '#9A9FA6' }}>Time spent during a session</li>
+              <li className="text-sm" style={{ color: '#9A9FA6' }}>Tab and navigation patterns</li>
             </ul>
-            <p className="text-xs mt-2 italic" style={{ color: '#9A9FA6' }}>
-              (Page content and form inputs are not stored.)
+            <p className="text-sm mt-2" style={{ color: '#0072df' }}>
+              Page content and form inputs are not stored.
             </p>
           </div>
 
           {/* Where it lives? */}
           <div className="mb-6">
-            <h3 className="text-lg font-semibold mb-2" style={{ color: '#080A0B' }}>
+            <h3 className="text-sm font-semibold mb-2" style={{ color: '#080A0B' }}>
               Where it lives?
             </h3>
             <p className="text-sm mb-2" style={{ color: '#080A0B' }}>
               Stored only on this device
             </p>
-            <ul className="space-y-1 ml-4">
-              <li className="text-sm" style={{ color: '#0072de' }}>No cloud sync</li>
-              <li className="text-sm" style={{ color: '#0072de' }}>No external servers</li>
-              <li className="text-sm" style={{ color: '#0072de' }}>No account or sign-in</li>
+            <ul className="space-y-1 ml-4 list-disc">
+              <li className="text-sm" style={{ color: '#9A9FA6' }}>No cloud sync</li>
+              <li className="text-sm" style={{ color: '#9A9FA6' }}>No external servers</li>
+              <li className="text-sm" style={{ color: '#9A9FA6' }}>No account or sign-in</li>
             </ul>
-            <p className="text-xs mt-2" style={{ color: '#0072de' }}>
-              Your data never leaves this browser.
+            <p className="text-sm mt-2" style={{ color: '#0072df' }}>
+            Your data never leaves this browser.
             </p>
           </div>
 
           {/* Your Control */}
           <div className="mb-6">
-            <h3 className="text-lg font-semibold mb-2" style={{ color: '#080A0B' }}>
+            <h3 className="text-sm font-semibold mb-2" style={{ color: '#080A0B' }}>
               Your Control
             </h3>
             <p className="text-sm mb-2" style={{ color: '#080A0B' }}>
               You stay in control
             </p>
-            <ul className="space-y-1 ml-4">
-              <li className="text-sm" style={{ color: '#0072de' }}>Pause context learning anytime</li>
-              <li className="text-sm" style={{ color: '#0072de' }}>Clear storage context from settings</li>
-              <li className="text-sm" style={{ color: '#0072de' }}>Nothing is shared automatically</li>
+            <ul className="space-y-1 ml-4 list-disc">
+              <li className="text-sm" style={{ color: '#9A9FA6' }}>Pause context learning anytime</li>
+              <li className="text-sm" style={{ color: '#9A9FA6' }}>Clear storage context from settings</li>
+              <li className="text-sm" style={{ color: '#9A9FA6' }}>Nothing is shared automatically</li>
             </ul>
+            <p className="text-sm mt-2" style={{ color: '#0072df' }}>
+            This feature runs entirely locally.
+            </p>
           </div>
 
-          <p className="text-xs italic" style={{ color: '#0072de' }}>
-            This feature runs entirely locally.
-          </p>
+          
         </div>
       </div>
     </div>

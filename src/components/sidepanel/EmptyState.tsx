@@ -56,7 +56,7 @@ export function EmptyState({ onShowPopulated }: EmptyStateProps) {
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg flex-shrink-0" style={{ backgroundColor: 'var(--primary)' }} />
           <h1 
-            className="text-xl font-semibold"
+            className="text-xl font"
             style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
             Aegis
           </h1>
@@ -73,7 +73,7 @@ export function EmptyState({ onShowPopulated }: EmptyStateProps) {
       </div>
 
       {/* Content */}
-      <div className="flex-1 flex flex-col items-center justify-start p-6 pt-4">
+      <div className="flex-1 flex flex-col items-center justify-between p-6 pt-4">
         <div className="flex flex-col items-center max-w-sm text-center">
         {/* Ambient Motion */}
         <div
@@ -82,66 +82,69 @@ export function EmptyState({ onShowPopulated }: EmptyStateProps) {
         />
 
         <h2
-          className="text-2xl font-semibold"
+          className="text-2xl font mb-6"
           style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
           Your Memory Timeline
         </h2>
 
         <p
-          className="text-lg mb-2"
+          className="text-lg mb-4"
           style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
           Your browsing memory lives here!
         </p>
 
         <p
-          className="text-sm leading-relaxed"
+          className="text-xs leading-relaxed"
           style={{ color: 'var(--gray)', fontFamily: "'Breeze Sans'" }}>
           As you browse, Aegis will remember the pages you visit. Your timeline will appear here, organized by session.
         </p>
 
         <p
-          className="text-sm leading-relaxed mt-2"
+          className="text-xs leading-relaxed "
           style={{ color: 'var(--gray)', fontFamily: "'Breeze Sans'" }}>
           Everything stays on your device. Nothing leaves unless you decide to share it.
         </p>
-
-        <p
-          className="text-sm leading-relaxed mt-4"
-          style={{ color: '#0072de', fontFamily: "'Breeze Sans'" }}>
-          Want to see an example?
-        </p>
-
-        <div className="flex justify-center mt-2">
-          <Button
-            onClick={() => {}}
-            className="h-[46px] font-semibold text-base rounded-full"
-            style={{
-              backgroundColor: '#0072de',
-              color: 'white'
-            }}>
-            Enable demo history
-          </Button>
         </div>
 
-        <p
-          className="text-xs leading-relaxed mt-1"
-          style={{ color: 'var(--gray)', fontFamily: "'Breeze Sans'" }}>
-          Try a short demo timeline.
-        </p>
+        {/* Bottom section with demo button and dev buttons */}
+        <div className="flex flex-col items-center gap-2 pb-4">
+          <p
+            className="text-sm leading-relaxed mb-1"
+            style={{ color: '#0072de', fontFamily: "'Breeze Sans'" }}>
+            Want to see an example?
+          </p>
 
-        <button
-          onClick={handleReset}
-          className="text-xs underline underline-offset-4 opacity-70 transition-opacity hover:opacity-100"
-          style={{ color: 'var(--gray)', fontFamily: "'Breeze Sans'" }}>
-          Reset onboarding (dev)
-        </button>
+          <div className="flex justify-center mb-2">
+            <Button
+              onClick={() => {}}
+              className="h-[46px] font text-base rounded-full"
+              style={{
+                backgroundColor: '#0072de',
+                color: 'white'
+              }}>
+              Enable Demo History
+            </Button>
+          </div>
 
-        <button
-          onClick={onShowPopulated}
-          className="mt-2 text-xs underline underline-offset-4 opacity-70 transition-opacity hover:opacity-100"
-          style={{ color: 'var(--gray)', fontFamily: "'Breeze Sans'" }}>
-          Show populated state (dev)
-        </button>
+          <p
+            className="text-xs leading-relaxed"
+            style={{ color: 'var(--gray)', fontFamily: "'Breeze Sans'" }}>
+            Try a short demo timeline.
+          </p>
+
+          <button
+            onClick={handleReset}
+            className="text-xs underline underline-offset-4 opacity-70 transition-opacity hover:opacity-100"
+            style={{ color: 'var(--gray)', fontFamily: "'Breeze Sans'" }}>
+            Reset onboarding (dev)
+          </button>
+
+          <button
+            onClick={onShowPopulated}
+            className="text-xs underline underline-offset-4 opacity-70 transition-opacity hover:opacity-100"
+            style={{ color: 'var(--gray)', fontFamily: "'Breeze Sans'" }}>
+            Show populated state (dev)
+          </button>
         </div>
       </div>
     </div>
