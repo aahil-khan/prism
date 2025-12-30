@@ -5,4 +5,6 @@ export type Session = {
   startTime: number
   endTime: number
   pages: PageEvent[]
+  inferredTitle?: string
+  labelId?: string // Optional label ID from user's label list
 }

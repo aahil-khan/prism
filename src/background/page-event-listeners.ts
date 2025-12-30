@@ -2,7 +2,7 @@ import { processPageEvent, getSessions } from "./sessionManager"
 import { getBehaviorState } from "./ephemeralBehavior"
 import { generateEmbedding } from "./embedding-engine"
 import { checkAndNotifySimilarPages } from "./similarity-notifier"
-import { markGraphForRebuild } from "./index"
+import { markGraphForRebuild, broadcastSessionUpdate } from "./index"
 
 // Listen for PAGE_VISITED events from content script
 export const setupPageVisitListener = () => {
@@ -42,6 +42,9 @@ export const setupPageVisitListener = () => {
           }
 
           await processPageEvent(baseEvent)
+
+          // Broadcast updated sessions to all registered sidepanel listeners
+          broadcastSessionUpdate()
 
           // Mark graph for rebuild after page event is processed
           markGraphForRebuild()

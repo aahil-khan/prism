@@ -2,6 +2,7 @@ import { X, Search, ChevronDown, Settings, ArrowLeft, ExternalLink, MoreVertical
 import { useEffect, useMemo, useState, useRef } from "react"
 import type { PageEvent } from "~/types/page-event"
 import type { Session } from "~/types/session"
+import type { Label } from "~/background/labelsStore"
 import { CoiPanel } from "./CoiPanel"
 import { GraphPanel } from "./GraphPanel"
 
@@ -43,25 +44,52 @@ interface PopulatedStateProps {
 export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
   const [activeTab, setActiveTab] = useState<"sessions" | "graph">("sessions")
   const [sessions, setSessions] = useState<Session[]>([])
+  const [labels, setLabels] = useState<Label[]>([])
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [expandFilters, setExpandFilters] = useState(false)
   const [selectedFilter, setSelectedFilter] = useState<number | null>(null)
+  const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null)
   const [expandedDays, setExpandedDays] = useState<string[]>(["today"])
   const [expandedSessions, setExpandedSessions] = useState<string[]>([])
+  const [showAddLabelModal, setShowAddLabelModal] = useState(false)
+  const [newLabelName, setNewLabelName] = useState("")
+  const [newLabelColor, setNewLabelColor] = useState("#3B82F6")
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    sendMessage<{ sessions: Session[] }>({ type: "GET_SESSIONS" })
+    // Initial load of sessions
+    const loadSessions = () => {
+      sendMessage<{ sessions: Session[] }>({ type: "GET_SESSIONS" })
+        .then((res) => {
+          setSessions(res?.sessions ?? [])
+        })
+        .catch((err) => {
+          console.error("Failed to load sessions:", err)
+          setError("Failed to load sessions")
+        })
+    }
+
+    // Load labels once
+    sendMessage<{ labels: Label[] }>({ type: "GET_LABELS" })
       .then((res) => {
-        setSessions(res?.sessions ?? [])
+        setLabels(res?.labels ?? [])
       })
       .catch((err) => {
-        console.error("Failed to load sessions:", err)
-        setError("Failed to load sessions")
+        console.error("Failed to load labels:", err)
       })
+
+    loadSessions()
+
+    // Poll for session updates every 2 seconds to catch real-time changes
+    const pollInterval = setInterval(loadSessions, 2000)
+
+    // Cleanup: stop polling on unmount
+    return () => {
+      clearInterval(pollInterval)
+    }
   }, [])
 
   const pages = useMemo(() => {
@@ -76,7 +104,12 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
     const yesterday = new Date(today)
     yesterday.setDate(yesterday.getDate() - 1)
 
-    sessions.forEach((session) => {
+    // Filter sessions by selected label if one is chosen
+    const filteredSessions = selectedLabelId 
+      ? sessions.filter((s) => s.labelId === selectedLabelId)
+      : sessions
+
+    filteredSessions.forEach((session) => {
       const sessionDate = new Date(session.startTime)
       const sessionDay = new Date(sessionDate.getFullYear(), sessionDate.getMonth(), sessionDate.getDate())
       const dateKey = sessionDay.toISOString().split('T')[0] // YYYY-MM-DD
@@ -104,11 +137,14 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
       grouped.get(dateKey)!.sessions.push(session)
     })
 
-    // Sort by date descending (newest first)
+    // Sort by date descending (newest first), and sort sessions within each day by startTime descending
     return Array.from(grouped.entries())
       .sort(([, a], [, b]) => b.date.getTime() - a.date.getTime())
-      .map(([, data]) => data)
-  }, [sessions])
+      .map(([, data]) => ({
+        ...data,
+        sessions: data.sessions.sort((a, b) => b.startTime - a.startTime)
+      }))
+  }, [sessions, selectedLabelId])
 
   const handleSearch = async (value: string) => {
     setSearchQuery(value)
@@ -151,6 +187,43 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
     // Also set localStorage as fallback
     localStorage.setItem("aegis-sidebar-closed", "true")
     window.close()
+  }
+
+  const handleAddLabel = async () => {
+    if (!newLabelName.trim()) return
+    try {
+      const res = await sendMessage<{ label: Label }>({
+        type: "ADD_LABEL",
+        payload: { name: newLabelName, color: newLabelColor }
+      })
+      if (res?.label) {
+        setLabels([...labels, res.label])
+        setNewLabelName("")
+        setNewLabelColor("#3B82F6")
+        setShowAddLabelModal(false)
+      }
+    } catch (err) {
+      console.error("Failed to add label:", err)
+    }
+  }
+
+  const handleDeleteLabel = async (labelId: string) => {
+    if (!window.confirm("Delete this label? Sessions with this label will no longer have it assigned.")) {
+      return
+    }
+    try {
+      await sendMessage<{ success: boolean }>({
+        type: "DELETE_LABEL",
+        payload: { labelId }
+      })
+      setLabels(labels.filter((l) => l.id !== labelId))
+      // Clear filter if deleted label was selected
+      if (selectedLabelId === labelId) {
+        setSelectedLabelId(null)
+      }
+    } catch (err) {
+      console.error("Failed to delete label:", err)
+    }
   }
 
   const MAX_OPEN_TABS = 10
@@ -267,26 +340,39 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
         {/* Scrollable Filters Section */}
         <div className="bg-white px-2 pb-2">
           <div className="flex flex-wrap items-center gap-2">
-            {/* Show first 3 filters or all if expanded */}
-            {MOCK_FILTERS.slice(0, expandFilters ? MOCK_FILTERS.length : 3).map((filter) => (
+            {/* Show first 3 labels or all if expanded */}
+            {labels.slice(0, expandFilters ? labels.length : 3).map((label) => (
               <button
-                key={filter.id}
+                key={label.id}
                 onClick={() => {
-                  setSelectedFilter(selectedFilter === filter.id ? null : filter.id)
+                  setSelectedLabelId(selectedLabelId === label.id ? null : label.id)
                 }}
                 className="px-4 py-2 rounded-full text-xs font-medium transition-all"
                 style={{
-                  backgroundColor: selectedFilter === filter.id ? '#000000' : '#FFFFFF',
-                  color: selectedFilter === filter.id ? '#FFFFFF' : '#000000',
-                  border: '1px solid #000000',
+                  backgroundColor: selectedLabelId === label.id ? (label.color || '#000000') : '#FFFFFF',
+                  color: selectedLabelId === label.id ? '#FFFFFF' : '#000000',
+                  border: `1px solid ${label.color || '#000000'}`,
                   fontFamily: "'Breeze Sans'",
                 }}>
-                {filter.label}
+                {label.name}
               </button>
             ))}
 
+            {/* Add Label Button */}
+            <button
+              onClick={() => setShowAddLabelModal(true)}
+              className="px-3 py-2 rounded-full text-xs font-medium transition-all"
+              style={{
+                backgroundColor: '#F5F5F5',
+                color: '#666',
+                border: '1px dashed #CCC',
+                fontFamily: "'Breeze Sans'",
+              }}>
+              + Add
+            </button>
+
             {/* More/Less button */}
-            {MOCK_FILTERS.length > 3 && (
+            {labels.length > 3 && (
               <button
                 onClick={() => setExpandFilters(!expandFilters)}
                 className="inline-flex items-center gap-1 text-xs font-medium transition-colors ml-auto"
@@ -397,7 +483,18 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
                   setExpandedSessions((prev) =>
                     prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
                   )
+                }}                labels={labels}
+                onUpdateSessionLabel={async (sessionId, labelId) => {
+                  try {
+                    await sendMessage<{ success: boolean }>({
+                      type: "UPDATE_SESSION_LABEL",
+                      payload: { sessionId, labelId }
+                    })
+                  } catch (err) {
+                    console.error("Failed to update session label:", err)
+                  }
                 }}
+                onDeleteLabel={handleDeleteLabel}
               />
             ))}
           </div>
@@ -412,6 +509,83 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
         </>
         )}
       </div>
+
+      {/* Add Label Modal */}
+      {showAddLabelModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-lg p-6 w-80 shadow-lg">
+            <h2 className="text-lg font-semibold mb-4" style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
+              Create New Label
+            </h2>
+            
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="text-xs font-medium" style={{ color: '#666', fontFamily: "'Breeze Sans'" }}>
+                  Label Name
+                </label>
+                <input
+                  type="text"
+                  value={newLabelName}
+                  onChange={(e) => setNewLabelName(e.target.value)}
+                  placeholder="e.g., Project X"
+                  className="w-full mt-2 px-3 py-2 border rounded-lg text-sm outline-none focus:border-blue-500"
+                  style={{ borderColor: '#DDD', fontFamily: "'Breeze Sans'" }}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      handleAddLabel()
+                    }
+                  }}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium" style={{ color: '#666', fontFamily: "'Breeze Sans'" }}>
+                  Color
+                </label>
+                <div className="flex items-center gap-2 mt-2">
+                  <input
+                    type="color"
+                    value={newLabelColor}
+                    onChange={(e) => setNewLabelColor(e.target.value)}
+                    className="w-12 h-10 border rounded cursor-pointer"
+                    style={{ borderColor: '#DDD' }}
+                  />
+                  <span className="text-xs" style={{ color: '#666' }}>
+                    {newLabelColor}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => {
+                    setShowAddLabelModal(false)
+                    setNewLabelName("")
+                    setNewLabelColor("#3B82F6")
+                  }}
+                  className="px-4 py-2 text-xs rounded-lg transition-colors"
+                  style={{
+                    backgroundColor: '#F5F5F5',
+                    color: '#666',
+                    fontFamily: "'Breeze Sans'",
+                  }}>
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddLabel}
+                  disabled={!newLabelName.trim()}
+                  className="px-4 py-2 text-xs rounded-lg text-white transition-colors disabled:opacity-50"
+                  style={{
+                    backgroundColor: newLabelName.trim() ? '#0072DE' : '#CCC',
+                    fontFamily: "'Breeze Sans'",
+                  }}>
+                  Create
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -425,6 +599,9 @@ interface DaySectionProps {
   onToggleDay: (key: string) => void
   expandedSessions: string[]
   onToggleSession: (id: string) => void
+  labels: Label[]
+  onUpdateSessionLabel: (sessionId: string, labelId: string | undefined) => Promise<void>
+  onDeleteLabel: (labelId: string) => Promise<void>
 }
 
 function DaySection({
@@ -435,6 +612,9 @@ function DaySection({
   onToggleDay,
   expandedSessions,
   onToggleSession,
+  labels,
+  onUpdateSessionLabel,
+  onDeleteLabel,
 }: DaySectionProps) {
   const visibleCount = isExpanded ? sessions.length : 3
 
@@ -456,6 +636,18 @@ function DaySection({
               session={session}
               isExpanded={expandedSessions.includes(session.id)}
               onToggle={() => onToggleSession(session.id)}
+              labels={labels}
+              onUpdateSessionLabel={async (sessionId, labelId) => {
+                try {
+                  await sendMessage<{ success: boolean }>({
+                    type: "UPDATE_SESSION_LABEL",
+                    payload: { sessionId, labelId }
+                  })
+                } catch (err) {
+                  console.error("Failed to update session label:", err)
+                }
+              }}
+              onDeleteLabel={onDeleteLabel}
             />
           </div>
         ))}
@@ -481,10 +673,14 @@ interface SessionItemProps {
   session: Session
   isExpanded: boolean
   onToggle: () => void
+  labels: Label[]
+  onUpdateSessionLabel: (sessionId: string, labelId: string | undefined) => void
+  onDeleteLabel?: (labelId: string) => Promise<void>
 }
 
-function SessionItem({ session, isExpanded, onToggle }: SessionItemProps) {
+function SessionItem({ session, isExpanded, onToggle, labels, onUpdateSessionLabel, onDeleteLabel }: SessionItemProps) {
   const [openMenuIndex, setOpenMenuIndex] = useState<number | null>(null)
+  const [showLabelPicker, setShowLabelPicker] = useState(false)
   const timeStart = new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const timeEnd = new Date(session.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const domains = [...new Set(session.pages.map((p) => new URL(p.url).hostname.replace('www.', '')))].slice(0, 3)
@@ -507,9 +703,9 @@ function SessionItem({ session, isExpanded, onToggle }: SessionItemProps) {
   }, [openMenuIndex])
   
   // Generate a title from the most common domain or first page
-  const sessionTitle = session.pages.length > 0 
+  const sessionTitle = session.inferredTitle || (session.pages.length > 0 
     ? (session.pages[0]?.title || domains[0] || "Session")
-    : "Session"
+    : "Session")
 
   return (
     <div 
@@ -554,6 +750,74 @@ function SessionItem({ session, isExpanded, onToggle }: SessionItemProps) {
             style={{ color: '#9A9FA6' }}>
             <ExternalLink className="h-4 w-4" />
           </button>
+          {/* Label Selector */}
+          <div className="relative">
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowLabelPicker(!showLabelPicker)
+              }}
+              className="px-2 py-1 text-xs rounded transition-colors"
+              style={{
+                backgroundColor: session.labelId 
+                  ? (labels.find(l => l.id === session.labelId)?.color || '#E8E8E8')
+                  : '#E8E8E8',
+                color: session.labelId ? '#FFFFFF' : '#666',
+                fontFamily: "'Breeze Sans'",
+              }}>
+              {session.labelId ? labels.find(l => l.id === session.labelId)?.name || 'Label' : 'Label'}
+            </button>
+            {showLabelPicker && (
+              <div
+                className="absolute top-full left-0 mt-1 z-20 bg-white rounded-lg py-1 min-w-[200px]"
+                style={{
+                  border: '1px solid #E5E5E5',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+                }}
+                onClick={(e) => e.stopPropagation()}>
+                <button
+                  onClick={() => {
+                    onUpdateSessionLabel(session.id, undefined)
+                    setShowLabelPicker(false)
+                  }}
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-gray-100 transition-colors"
+                  style={{ color: '#666', fontFamily: "'Breeze Sans'" }}>
+                  No label
+                </button>
+                {labels.map((label) => (
+                  <div
+                    key={label.id}
+                    className="flex items-center justify-between px-3 py-2 text-xs hover:bg-gray-100 transition-colors group">
+                    <button
+                      onClick={() => {
+                        onUpdateSessionLabel(session.id, label.id)
+                        setShowLabelPicker(false)
+                      }}
+                      className="flex-1 text-left flex items-center gap-2"
+                      style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
+                      <div
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: label.color || '#000' }}
+                      />
+                      {label.name}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (onDeleteLabel) {
+                          onDeleteLabel(label.id)
+                        }
+                      }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-red-100 rounded ml-1"
+                      title="Delete label"
+                      style={{ color: '#9A9FA6' }}>
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
         {/* Expand/Collapse Icon */}
         <button
@@ -570,7 +834,10 @@ function SessionItem({ session, isExpanded, onToggle }: SessionItemProps) {
       {isExpanded && (
         <div className="flex flex-col gap-1 pt-2" onClick={(e) => e.stopPropagation()}>
           {/* Individual Links */}
-          {session.pages.map((page, index) => {
+          {session.pages
+            .slice()
+            .sort((a, b) => (b.timestamp || b.openedAt) - (a.timestamp || a.openedAt))
+            .map((page, index) => {
             // Generate a time for each page based on timestamp or index
             const pageTime = page.openedAt || page.timestamp
             const timeStr = new Date(pageTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
