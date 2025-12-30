@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react"
 import ForceGraph2D from "react-force-graph-2d"
 import { Button } from "@/components/ui/button"
-import { Search, X } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -30,8 +29,6 @@ export function GraphPanel() {
   const [loading, setLoading] = useState(true)
   const [minSimilarity, setMinSimilarity] = useState(0.35)
   const [selectedClusters, setSelectedClusters] = useState<Set<number>>(new Set())
-  const [searchQuery, setSearchQuery] = useState("")
-  const [timeFilter, setTimeFilter] = useState<"all" | "today" | "week">("all")
   const graphRef = useRef<any>()
   const containerRef = useRef<HTMLDivElement>(null)
   const [dimensions, setDimensions] = useState({ width: 500, height: 500 })
@@ -112,33 +109,8 @@ export function GraphPanel() {
   const clusters = Array.from(new Set(graph.nodes.map(n => n.cluster)))
   const allClustersSelected = selectedClusters.size === 0
 
-  // Apply time filter
-  let timeFilteredNodes = graph.nodes
-  if (timeFilter !== "all") {
-    const now = Date.now()
-    const cutoff = timeFilter === "today" 
-      ? now - 24 * 60 * 60 * 1000 
-      : now - 7 * 24 * 60 * 60 * 1000
-    
-    timeFilteredNodes = graph.nodes.filter(n => {
-      return (graph.lastUpdated - (n.visitCount * 1000)) >= cutoff
-    })
-  }
-
-  // Apply search filter
-  const searchFilteredNodes = searchQuery.trim()
-    ? timeFilteredNodes.filter(n => 
-        n.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        n.domain.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : timeFilteredNodes
-
   // Filter graph data
-  const filteredEdges = graph.edges.filter(e => 
-    e.similarity >= minSimilarity &&
-    searchFilteredNodes.some(n => n.id === e.source) &&
-    searchFilteredNodes.some(n => n.id === e.target)
-  )
+  const filteredEdges = graph.edges.filter(e => e.similarity >= minSimilarity)
   const visibleNodeIds = new Set<string>()
   
   filteredEdges.forEach(e => {
@@ -147,7 +119,7 @@ export function GraphPanel() {
   })
 
   // If no edges pass the threshold, show all nodes anyway
-  const filteredNodes = searchFilteredNodes.filter(n => {
+  const filteredNodes = graph.nodes.filter(n => {
     if (filteredEdges.length === 0) {
       // Show all nodes when there are no edges
       if (allClustersSelected) return true
@@ -261,123 +233,83 @@ export function GraphPanel() {
 
   return (
     <div className="w-full rounded-lg border bg-white shadow-sm" style={{ borderColor: "#E5E5E5" }}>
-      <div className="p-3 border-b flex flex-col gap-3" style={{ borderColor: "#E5E5E5" }}>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">Knowledge Graph</p>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-sm text-slate-700">{filteredNodes.length} nodes</span>
-              <span className="text-slate-400">•</span>
-              <span className="text-sm text-slate-700">{graphData.links.length} edges</span>
-              <span className="text-slate-400">•</span>
-              <span className="text-sm text-slate-700">{clusters.length} clusters</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button size="sm" variant="outline">Filters</Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Graph Filters</DialogTitle>
-                </DialogHeader>
-                <div className="flex flex-col gap-4">
-                  <div>
-                    <label className="flex flex-col gap-2">
-                      <div className="flex items-center justify-between text-sm font-medium text-slate-700">
-                        <span>Min Similarity</span>
-                        <span>{minSimilarity.toFixed(2)}</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={0.2}
-                        max={0.6}
-                        step={0.05}
-                        value={minSimilarity}
-                        onChange={(e) => setMinSimilarity(parseFloat(e.target.value))}
-                        className="w-full accent-blue-600"
-                      />
-                    </label>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-slate-700 mb-2">Clusters</p>
-                    <div className="flex flex-wrap gap-2">
-                      {clusters.map(clusterId => (
-                        <button
-                          key={clusterId}
-                          onClick={() => toggleCluster(clusterId)}
-                          className={`px-3 py-1 text-xs rounded-full border transition-colors ${
-                            allClustersSelected || selectedClusters.has(clusterId)
-                              ? "border-transparent text-white"
-                              : "border-slate-300 text-slate-600 bg-white"
-                          }`}
-                          style={{
-                            backgroundColor: allClustersSelected || selectedClusters.has(clusterId)
-                              ? getClusterColor(clusterId)
-                              : undefined
-                          }}
-                        >
-                          Cluster {clusterId}
-                        </button>
-                      ))}
-                    </div>
-                    {!allClustersSelected && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={clearClusterFilter}
-                        className="mt-3"
-                      >
-                        Show All Clusters
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-            <Button size="sm" onClick={handleRefresh} className="bg-[#0072de] text-white hover:bg-[#0066c6]">
-              Refresh
-            </Button>
+      <div className="p-3 border-b flex items-center justify-between" style={{ borderColor: "#E5E5E5" }}>
+        <div>
+          <p className="text-xs uppercase tracking-wide text-slate-500">Knowledge Graph</p>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-sm text-slate-700">{filteredNodes.length} nodes</span>
+            <span className="text-slate-400">•</span>
+            <span className="text-sm text-slate-700">{graphData.links.length} edges</span>
+            <span className="text-slate-400">•</span>
+            <span className="text-sm text-slate-700">{clusters.length} clusters</span>
           </div>
         </div>
-        
-        {/* Search and Time Filter */}
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search pages..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-9 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={{ borderColor: "#E5E5E5" }}
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-          <div className="flex gap-1">
-            {(["all", "today", "week"] as const).map((filter) => (
-              <button
-                key={filter}
-                onClick={() => setTimeFilter(filter)}
-                className={`px-3 py-2 text-xs font-medium rounded-md transition-colors ${
-                  timeFilter === filter
-                    ? "bg-[#0072de] text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                {filter === "all" ? "All" : filter === "today" ? "Today" : "Week"}
-              </button>
-            ))}
-          </div>
+        <div className="flex items-center gap-2">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button size="sm" variant="outline">Filters</Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Graph Filters</DialogTitle>
+              </DialogHeader>
+              <div className="flex flex-col gap-4">
+                <div>
+                  <label className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between text-sm font-medium text-slate-700">
+                      <span>Min Similarity</span>
+                      <span>{minSimilarity.toFixed(2)}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0.2}
+                      max={0.6}
+                      step={0.05}
+                      value={minSimilarity}
+                      onChange={(e) => setMinSimilarity(parseFloat(e.target.value))}
+                      className="w-full accent-blue-600"
+                    />
+                  </label>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-slate-700 mb-2">Clusters</p>
+                  <div className="flex flex-wrap gap-2">
+                    {clusters.map(clusterId => (
+                      <button
+                        key={clusterId}
+                        onClick={() => toggleCluster(clusterId)}
+                        className={`px-3 py-1 text-xs rounded-full border transition-colors ${
+                          allClustersSelected || selectedClusters.has(clusterId)
+                            ? "border-transparent text-white"
+                            : "border-slate-300 text-slate-600 bg-white"
+                        }`}
+                        style={{
+                          backgroundColor: allClustersSelected || selectedClusters.has(clusterId)
+                            ? getClusterColor(clusterId)
+                            : undefined
+                        }}
+                      >
+                        Cluster {clusterId}
+                      </button>
+                    ))}
+                  </div>
+                  {!allClustersSelected && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={clearClusterFilter}
+                      className="mt-3"
+                    >
+                      Show All Clusters
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Button size="sm" onClick={handleRefresh} className="bg-[#0072de] text-white hover:bg-[#0066c6]">
+            Refresh
+          </Button>
         </div>
       </div>
       <div ref={containerRef} className="relative bg-white" style={{ height: "500px", width: "100%" }}>
