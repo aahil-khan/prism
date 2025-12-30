@@ -17,8 +17,8 @@ if (env.backends.onnx.webnn) {
   env.backends.onnx.webnn = false as any
 }
 
-// Force local models only
-env.allowRemoteModels = false
+// Force local models only after it is downloaded once
+env.allowRemoteModels = true
 env.allowLocalModels = true
 env.useBrowserCache = true
 
