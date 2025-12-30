@@ -1,14 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react"
 import ForceGraph2D from "react-force-graph-2d"
-import { Button } from "@/components/ui/button"
-import { Search, X } from "lucide-react"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { Search, X, ChevronDown, RotateCw, Sliders, ZoomIn, ZoomOut } from "lucide-react"
 import type { KnowledgeGraph, GraphNode } from "~/lib/knowledge-graph"
 import { getClusterColor } from "~/lib/knowledge-graph"
 
@@ -32,9 +24,11 @@ export function GraphPanel() {
   const [selectedClusters, setSelectedClusters] = useState<Set<number>>(new Set())
   const [searchQuery, setSearchQuery] = useState("")
   const [timeFilter, setTimeFilter] = useState<"all" | "today" | "week">("all")
+  const [showFilters, setShowFilters] = useState(false)
+  const hoveredNodeRef = useRef<any>(null)
   const graphRef = useRef<any>()
   const containerRef = useRef<HTMLDivElement>(null)
-  const [dimensions, setDimensions] = useState({ width: 500, height: 500 })
+  const [dimensions, setDimensions] = useState({ width: 500, height: 400 })
 
   const loadGraph = useCallback(async () => {
     setLoading(true)
@@ -69,7 +63,7 @@ export function GraphPanel() {
     const updateDimensions = () => {
       if (containerRef.current) {
         const width = containerRef.current.offsetWidth
-        const height = 500
+        const height = 400
         setDimensions({ width, height })
       }
     }
@@ -92,19 +86,37 @@ export function GraphPanel() {
 
   if (loading) {
     return (
-      <div className="w-full rounded-lg border bg-white p-6 shadow-sm text-center" style={{ borderColor: "#E5E5E5" }}>
-        <p className="text-sm text-slate-500">Loading knowledge graph...</p>
+      <div className="flex items-center justify-center py-12">
+        <div className="flex flex-col items-center gap-3">
+          <div className="animate-spin">
+            <RotateCw className="h-6 w-6" style={{ color: '#0072de' }} />
+          </div>
+          <p className="text-xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
+            Loading knowledge graph...
+          </p>
+        </div>
       </div>
     )
   }
 
   if (!graph || graph.nodes.length === 0) {
     return (
-      <div className="w-full rounded-lg border bg-white p-6 shadow-sm text-center" style={{ borderColor: "#E5E5E5" }}>
-        <p className="text-sm text-slate-500 mb-3">No pages available yet. Visit some pages to build the graph.</p>
-        <Button size="sm" onClick={handleRefresh} className="bg-[#0072de] text-white hover:bg-[#0066c6]">
+      <div className="flex flex-col items-center justify-center py-12 gap-4">
+        <Search className="h-10 w-10 opacity-20" style={{ color: '#9A9FA6' }} />
+        <div className="text-center">
+          <p className="text-sm mb-2" style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
+            No pages available yet
+          </p>
+          <p className="text-xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
+            Visit some pages to build the graph
+          </p>
+        </div>
+        <button
+          onClick={handleRefresh}
+          className="px-4 py-2 rounded-lg text-xs font-medium transition-colors"
+          style={{ backgroundColor: '#0072de', color: 'white', fontFamily: "'Breeze Sans'" }}>
           Refresh Graph
-        </Button>
+        </button>
       </div>
     )
   }
@@ -192,14 +204,48 @@ export function GraphPanel() {
       }))
   }
 
+  // Build a set of connected node IDs when hovering
+  const connectedNodeIds = new Set<string>()
+  const hoveredNode = hoveredNodeRef.current
+  if (hoveredNode) {
+    connectedNodeIds.add(hoveredNode.id)
+    graphData.links.forEach(link => {
+      if (link.source === hoveredNode.id || (typeof link.source === 'object' && (link.source as any).id === hoveredNode.id)) {
+        const targetId = typeof link.target === 'string' ? link.target : (link.target as any).id
+        connectedNodeIds.add(targetId)
+      }
+      if (link.target === hoveredNode.id || (typeof link.target === 'object' && (link.target as any).id === hoveredNode.id)) {
+        const sourceId = typeof link.source === 'string' ? link.source : (link.source as any).id
+        connectedNodeIds.add(sourceId)
+      }
+    })
+  }
+
   const handleNodeClick = (node: any) => {
     if (node.url) {
       chrome.tabs.create({ url: node.url })
     }
   }
 
+  const handleZoomIn = () => {
+    if (graphRef.current) {
+      const currentZoom = graphRef.current.zoom()
+      graphRef.current.zoom(currentZoom * 1.3, 400)
+    }
+  }
+
+  const handleZoomOut = () => {
+    if (graphRef.current) {
+      const currentZoom = graphRef.current.zoom()
+      graphRef.current.zoom(currentZoom / 1.3, 400)
+    }
+  }
+
   // Draw cluster boundaries for clusters with 2+ nodes
   const drawClusterBoundaries = (ctx: CanvasRenderingContext2D, globalScale: number) => {
+    // Only draw if not hovering or zoomed out too much
+    if (hoveredNode || globalScale < 0.5) return
+    
     clustersWithMultipleNodes.forEach(clusterId => {
       const clusterNodes = graphData.nodes.filter(n => n.cluster === clusterId)
       if (clusterNodes.length < 2) return
@@ -232,13 +278,13 @@ export function GraphPanel() {
       ctx.closePath()
       
       const color = getClusterColor(clusterId)
-      ctx.strokeStyle = color + '40' // 25% opacity
-      ctx.lineWidth = 2 / globalScale
-      ctx.setLineDash([5 / globalScale, 5 / globalScale])
+      ctx.strokeStyle = color + '30' // 19% opacity
+      ctx.lineWidth = 1.5 / globalScale
+      ctx.setLineDash([4 / globalScale, 4 / globalScale])
       ctx.stroke()
       ctx.setLineDash([])
       
-      ctx.fillStyle = color + '10' // 6% opacity
+      ctx.fillStyle = color + '08' // 3% opacity
       ctx.fill()
     })
   }
@@ -259,128 +305,185 @@ export function GraphPanel() {
     setSelectedClusters(new Set())
   }
 
+  // Count active filters
+  const activeFilterCount = 
+    (searchQuery.trim() ? 1 : 0) +
+    (timeFilter !== "all" ? 1 : 0) +
+    (selectedClusters.size > 0 ? 1 : 0) +
+    (minSimilarity !== 0.35 ? 1 : 0)
+
   return (
-    <div className="w-full rounded-lg border bg-white shadow-sm" style={{ borderColor: "#E5E5E5" }}>
-      <div className="p-3 border-b flex flex-col gap-3" style={{ borderColor: "#E5E5E5" }}>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">Knowledge Graph</p>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-sm text-slate-700">{filteredNodes.length} nodes</span>
-              <span className="text-slate-400">•</span>
-              <span className="text-sm text-slate-700">{graphData.links.length} edges</span>
-              <span className="text-slate-400">•</span>
-              <span className="text-sm text-slate-700">{clusters.length} clusters</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button size="sm" variant="outline">Filters</Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Graph Filters</DialogTitle>
-                </DialogHeader>
-                <div className="flex flex-col gap-4">
-                  <div>
-                    <label className="flex flex-col gap-2">
-                      <div className="flex items-center justify-between text-sm font-medium text-slate-700">
-                        <span>Min Similarity</span>
-                        <span>{minSimilarity.toFixed(2)}</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={0.2}
-                        max={0.6}
-                        step={0.05}
-                        value={minSimilarity}
-                        onChange={(e) => setMinSimilarity(parseFloat(e.target.value))}
-                        className="w-full accent-blue-600"
-                      />
-                    </label>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-slate-700 mb-2">Clusters</p>
-                    <div className="flex flex-wrap gap-2">
-                      {clusters.map(clusterId => (
-                        <button
-                          key={clusterId}
-                          onClick={() => toggleCluster(clusterId)}
-                          className={`px-3 py-1 text-xs rounded-full border transition-colors ${
-                            allClustersSelected || selectedClusters.has(clusterId)
-                              ? "border-transparent text-white"
-                              : "border-slate-300 text-slate-600 bg-white"
-                          }`}
-                          style={{
-                            backgroundColor: allClustersSelected || selectedClusters.has(clusterId)
-                              ? getClusterColor(clusterId)
-                              : undefined
-                          }}
-                        >
-                          Cluster {clusterId}
-                        </button>
-                      ))}
-                    </div>
-                    {!allClustersSelected && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={clearClusterFilter}
-                        className="mt-3"
-                      >
-                        Show All Clusters
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-            <Button size="sm" onClick={handleRefresh} className="bg-[#0072de] text-white hover:bg-[#0066c6]">
-              Refresh
-            </Button>
-          </div>
+    <div className="flex flex-col gap-0">
+      {/* Compact Header */}
+      <div className="flex items-center justify-between px-3 py-3 border-b" style={{ borderColor: '#E5E5E5' }}>
+        <div className="flex items-center gap-3">
+          <h3 className="text-sm font-medium" style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
+            Knowledge Graph
+          </h3>
+          <span className="text-xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
+            {filteredNodes.length} nodes
+          </span>
         </div>
-        
-        {/* Search and Time Filter */}
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search pages..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-9 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={{ borderColor: "#E5E5E5" }}
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              >
-                <X className="h-4 w-4" />
-              </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-gray-50"
+            style={{ color: '#080A0B', fontFamily: "'Breeze Sans'", border: '1px solid #E5E5E5' }}>
+            <Sliders className="h-3.5 w-3.5" />
+            <span>Filters</span>
+            {activeFilterCount > 0 && (
+              <span 
+                className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 text-[10px] font-bold rounded-full"
+                style={{ backgroundColor: '#0072de', color: 'white' }}>
+                {activeFilterCount}
+              </span>
             )}
-          </div>
-          <div className="flex gap-1">
-            {(["all", "today", "week"] as const).map((filter) => (
-              <button
-                key={filter}
-                onClick={() => setTimeFilter(filter)}
-                className={`px-3 py-2 text-xs font-medium rounded-md transition-colors ${
-                  timeFilter === filter
-                    ? "bg-[#0072de] text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                {filter === "all" ? "All" : filter === "today" ? "Today" : "Week"}
-              </button>
-            ))}
-          </div>
+          </button>
+          <button
+            onClick={handleRefresh}
+            className="p-1.5 rounded-lg transition-colors hover:bg-gray-50"
+            style={{ color: '#9A9FA6' }}>
+            <RotateCw className="h-4 w-4" />
+          </button>
         </div>
       </div>
-      <div ref={containerRef} className="relative bg-white" style={{ height: "500px", width: "100%" }}>
+
+      {/* Always Visible Search Bar */}
+      <div className="px-3 py-2 border-b bg-white" style={{ borderColor: '#E5E5E5' }}>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: '#9A9FA6' }} />
+          <input
+            type="text"
+            placeholder="Search pages..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-9 py-2 text-xs rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+            style={{ 
+              border: '1px solid #E5E5E5', 
+              backgroundColor: 'white',
+              color: '#080A0B',
+              fontFamily: "'Breeze Sans'"
+            }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 hover:opacity-70"
+              style={{ color: '#9A9FA6' }}>
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Collapsible Filters Section */}
+      {showFilters && (
+        <div className="px-3 py-3 border-b bg-gray-50/50 flex flex-col gap-3" style={{ borderColor: '#E5E5E5' }}>
+          {/* Time Filter Chips */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium" style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
+              Time:
+            </span>
+            <div className="flex gap-1.5">
+              {(["all", "today", "week"] as const).map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => setTimeFilter(filter)}
+                  className="px-3 py-1 text-xs font-medium rounded-full transition-all"
+                  style={{
+                    backgroundColor: timeFilter === filter ? '#000000' : '#FFFFFF',
+                    color: timeFilter === filter ? '#FFFFFF' : '#000000',
+                    border: '1px solid #000000',
+                    fontFamily: "'Breeze Sans'"
+                  }}>
+                  {filter === "all" ? "All Time" : filter === "today" ? "Today" : "This Week"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Similarity Slider */}
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-medium whitespace-nowrap" style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
+              Similarity:
+            </span>
+            <div className="flex-1 flex items-center gap-2">
+              <input
+                type="range"
+                min={0.2}
+                max={0.6}
+                step={0.05}
+                value={minSimilarity}
+                onChange={(e) => setMinSimilarity(parseFloat(e.target.value))}
+                className="flex-1 h-1 rounded-lg appearance-none cursor-pointer"
+                style={{
+                  background: `linear-gradient(to right, #0072de 0%, #0072de ${((minSimilarity - 0.2) / 0.4) * 100}%, #E5E5E5 ${((minSimilarity - 0.2) / 0.4) * 100}%, #E5E5E5 100%)`
+                }}
+              />
+              <span className="text-xs font-mono w-10 text-right" style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
+                {minSimilarity.toFixed(2)}
+              </span>
+            </div>
+          </div>
+
+          {/* Cluster Filter Chips */}
+          {clusters.length > 0 && (
+            <div className="flex items-start gap-2">
+              <span className="text-xs font-medium pt-1 whitespace-nowrap" style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
+                Clusters:
+              </span>
+              <div className="flex-1 flex flex-wrap gap-1.5">
+                {clusters.map(clusterId => {
+                  const isActive = allClustersSelected || selectedClusters.has(clusterId)
+                  return (
+                    <button
+                      key={clusterId}
+                      onClick={() => toggleCluster(clusterId)}
+                      className="px-2.5 py-1 text-xs font-medium rounded-full transition-all"
+                      style={{
+                        backgroundColor: isActive ? getClusterColor(clusterId) : '#FFFFFF',
+                        color: isActive ? '#FFFFFF' : '#080A0B',
+                        border: `1px solid ${isActive ? getClusterColor(clusterId) : '#E5E5E5'}`,
+                        fontFamily: "'Breeze Sans'"
+                      }}>
+                      {clusterId}
+                    </button>
+                  )
+                })}
+                {!allClustersSelected && (
+                  <button
+                    onClick={clearClusterFilter}
+                    className="px-2.5 py-1 text-xs font-medium rounded-full transition-all underline"
+                    style={{ color: '#0072de', fontFamily: "'Breeze Sans'" }}>
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Graph Container */}
+      <div ref={containerRef} className="relative bg-white overflow-hidden" style={{ height: "400px", width: "100%" }}>
+        {/* Navigation Controls */}
+        <div className="absolute top-3 right-3 z-10 flex flex-col gap-1">
+          <button
+            onClick={handleZoomIn}
+            className="p-2 rounded-lg bg-white shadow-sm transition-all hover:bg-gray-50"
+            style={{ border: '1px solid #E5E5E5' }}
+            title="Zoom in">
+            <ZoomIn className="h-4 w-4" style={{ color: '#080A0B' }} />
+          </button>
+          <button
+            onClick={handleZoomOut}
+            className="p-2 rounded-lg bg-white shadow-sm transition-all hover:bg-gray-50"
+            style={{ border: '1px solid #E5E5E5' }}
+            title="Zoom out">
+            <ZoomOut className="h-4 w-4" style={{ color: '#080A0B' }} />
+          </button>
+        </div>
+
         {filteredNodes.length > 0 ? (
           <ForceGraph2D
             ref={graphRef}
@@ -397,10 +500,15 @@ export function GraphPanel() {
             nodeRelSize={4}
             nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
               const label = node.label
-              const fontSize = 12 / globalScale
-              ctx.font = `${fontSize}px Sans-Serif`
+              const fontSize = 11 / globalScale
+              ctx.font = `${fontSize}px 'Breeze Sans', Sans-Serif`
               
-              const size = node.__bckgDimensions ? node.__bckgDimensions[0] : 4
+              let size = node.__bckgDimensions ? node.__bckgDimensions[0] : 4
+              
+              // Scale up hovered node
+              if (node.id === hoveredNodeRef.current?.id) {
+                size *= 1.6
+              }
               
               // Draw node circle
               ctx.beginPath()
@@ -408,27 +516,44 @@ export function GraphPanel() {
               ctx.fillStyle = node.color
               ctx.fill()
               
-              // Draw border for emphasis
-              ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'
-              ctx.lineWidth = 0.5 / globalScale
+              // Draw border - thicker for hovered node
+              ctx.strokeStyle = node.id === hoveredNodeRef.current?.id ? '#FFFFFF' : 'rgba(255, 255, 255, 0.9)'
+              ctx.lineWidth = node.id === hoveredNodeRef.current?.id ? 2 / globalScale : 0.8 / globalScale
               ctx.stroke()
               
-              // Draw label below node
-              if (globalScale > 0.8) {
+              // Draw label below node (show at lower zoom threshold or when hovered/connected)
+              const shouldShowLabel = globalScale > 0.6 || (hoveredNodeRef.current && connectedNodeIds.has(node.id))
+              if (shouldShowLabel) {
                 ctx.textAlign = 'center'
                 ctx.textBaseline = 'top'
-                ctx.fillStyle = '#1e293b'
-                ctx.fillText(label, node.x, node.y + size + 2)
+                ctx.fillStyle = '#080A0B'
+                ctx.fillText(label, node.x, node.y + size + 3)
               }
             }}
             nodeCanvasObjectMode={() => 'replace'}
-            linkWidth={(link: any) => Math.max(0.5, link.value * 2)}
+            linkWidth={(link: any) => {
+              // Thicker links when hovering
+              if (hoveredNode) {
+                const sourceId = typeof link.source === 'string' ? link.source : link.source.id
+                const targetId = typeof link.target === 'string' ? link.target : link.target.id
+                if (sourceId === hoveredNode.id || targetId === hoveredNode.id) {
+                  return Math.max(1.5, link.value * 3)
+                }
+              }
+              return Math.max(0.5, link.value * 1.5)
+            }}
             linkColor={() => "#cbd5e1"}
             linkDirectionalParticles={0}
             onNodeClick={handleNodeClick}
+            onNodeHover={(node) => {
+              hoveredNodeRef.current = node
+            }}
             cooldownTicks={100}
             dagMode={null}
             d3VelocityDecay={0.3}
+            enableNodeDrag={true}
+            enableZoomInteraction={true}
+            enablePanInteraction={true}
             onRenderFramePre={(ctx: CanvasRenderingContext2D, globalScale: number) => {
               drawClusterBoundaries(ctx, globalScale)
             }}
@@ -443,13 +568,12 @@ export function GraphPanel() {
             }}
           />
         ) : (
-          <div className="flex items-center justify-center h-full text-sm text-slate-500">
-            No nodes to display. Try lowering the similarity threshold.
+          <div className="flex items-center justify-center h-full">
+            <p className="text-xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
+              No nodes match current filters
+            </p>
           </div>
         )}
-      </div>
-      <div className="p-3 border-t text-xs text-slate-500" style={{ borderColor: "#E5E5E5" }}>
-        Click nodes to open pages. Node size reflects visit count. Edge width shows similarity strength.
       </div>
     </div>
   )

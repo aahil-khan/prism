@@ -218,7 +218,7 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
             borderBottom: activeTab === "sessions" ? "2px solid #0072de" : "none",
             fontFamily: "'Breeze Sans'"
           }}>
-          Sessions
+          Timeline
         </button>
         <button
           onClick={() => setActiveTab("graph")}
