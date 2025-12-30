@@ -51,6 +51,7 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
   const [selectedFilter, setSelectedFilter] = useState<number | null>(null)
   const [expandedDays, setExpandedDays] = useState<string[]>(["today"])
   const [expandedSessions, setExpandedSessions] = useState<string[]>([])
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     sendMessage<{ sessions: Session[] }>({ type: "GET_SESSIONS" })
@@ -67,56 +68,80 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
     return sessions.flatMap((s) => s.pages)
   }, [sessions])
 
-  // Group real sessions by date
+  // Group real sessions by date (infinite menu)
   const realSessionsByDay = useMemo(() => {
+    const grouped: Map<string, { sessions: Session[]; date: Date; label: string }> = new Map()
     const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const yesterday = new Date(today)
     yesterday.setDate(yesterday.getDate() - 1)
 
-    const grouped: { today: Session[]; yesterday: Session[]; older: Session[] } = {
-      today: [],
-      yesterday: [],
-      older: [],
-    }
-
     sessions.forEach((session) => {
       const sessionDate = new Date(session.startTime)
       const sessionDay = new Date(sessionDate.getFullYear(), sessionDate.getMonth(), sessionDate.getDate())
+      const dateKey = sessionDay.toISOString().split('T')[0] // YYYY-MM-DD
 
-      if (sessionDay.getTime() === today.getTime()) {
-        grouped.today.push(session)
-      } else if (sessionDay.getTime() === yesterday.getTime()) {
-        grouped.yesterday.push(session)
-      } else {
-        grouped.older.push(session)
+      if (!grouped.has(dateKey)) {
+        // Generate label: "Today - Monday, December 30" or "Yesterday - Sunday, December 29" or "Monday, December 28"
+        let label = ''
+        if (sessionDay.getTime() === today.getTime()) {
+          const dayName = sessionDay.toLocaleString('en-US', { weekday: 'long' })
+          const dateStr = sessionDay.toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+          label = `Today - ${dayName}, ${dateStr}`
+        } else if (sessionDay.getTime() === yesterday.getTime()) {
+          const dayName = sessionDay.toLocaleString('en-US', { weekday: 'long' })
+          const dateStr = sessionDay.toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+          label = `Yesterday - ${dayName}, ${dateStr}`
+        } else {
+          const dayName = sessionDay.toLocaleString('en-US', { weekday: 'long' })
+          const dateStr = sessionDay.toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+          label = `${dayName}, ${dateStr}`
+        }
+
+        grouped.set(dateKey, { sessions: [], date: sessionDay, label })
       }
+
+      grouped.get(dateKey)!.sessions.push(session)
     })
 
-    return grouped
+    // Sort by date descending (newest first)
+    return Array.from(grouped.entries())
+      .sort(([, a], [, b]) => b.date.getTime() - a.date.getTime())
+      .map(([, data]) => data)
   }, [sessions])
 
   const handleSearch = async (value: string) => {
     setSearchQuery(value)
+    
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+    
     if (!value.trim()) {
       setResults([])
       return
     }
 
+    // Set loading state immediately
     setLoading(true)
     setError(null)
-    try {
-      const res = await sendMessage<{ results: SearchResult[] }>({
-        type: "SEARCH_QUERY",
-        payload: { query: value }
-      })
-      setResults(res?.results ?? [])
-    } catch (err) {
-      console.error("Search failed:", err)
-      setError("Search failed")
-    } finally {
-      setLoading(false)
-    }
+    
+    // Debounce: wait 300ms before searching
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await sendMessage<{ results: SearchResult[] }>({
+          type: "SEARCH_QUERY",
+          payload: { query: value }
+        })
+        setResults(res?.results ?? [])
+      } catch (err) {
+        console.error("Search failed:", err)
+        setError("Search failed")
+      } finally {
+        setLoading(false)
+      }
+    }, 300)
   }
 
   const handleClose = () => {
@@ -176,9 +201,9 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
         </button>
       </div>
 
-      <div className="px-3 pt-2">
+      {/* <div className="px-3 pt-2">
         <CoiPanel sessions={sessions} />
-      </div>
+      </div> */}
 
       {/* Tabs */}
       <div className="px-3 pt-3 flex gap-1 border-b" style={{ borderColor: '#E5E5E5' }}>
@@ -274,11 +299,10 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
             )}
           </div>
         </div>
-
-          <div className="flex items-center justify-between px-1 text-xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
+            {/* dev: number of pages indexed */}
+          {/* <div className="flex items-center justify-between px-1 text-xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
             <span>{pages.length} pages indexed</span>
-            {loading && <span>Searching...</span>}
-          </div>
+          </div> */}
           {error && (
             <div className="mt-1 px-2 text-xs" style={{ color: '#b00020', fontFamily: "'Breeze Sans'" }}>
               {error}
@@ -299,11 +323,34 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
                 </button>
               </div>
             )}
-            {results.length === 0 && !loading && (
-              <div className="text-sm px-2" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
-                No results found.
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-4">
+                <div className="flex gap-1">
+                  <div
+                    className="w-2 h-2 rounded-full animate-bounce"
+                    style={{ backgroundColor: '#0074FB', animationDelay: '0ms' }}
+                  />
+                  <div
+                    className="w-2 h-2 rounded-full animate-bounce"
+                    style={{ backgroundColor: '#0074FB', animationDelay: '150ms' }}
+                  />
+                  <div
+                    className="w-2 h-2 rounded-full animate-bounce"
+                    style={{ backgroundColor: '#0074FB', animationDelay: '300ms' }}
+                  />
+                </div>
+                <p className="text-xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
+                  Searching...
+                </p>
               </div>
-            )}
+            ) : results.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Search className="h-8 w-8 opacity-30 mb-2" style={{ color: '#9A9FA6' }} />
+                <p className="text-sm" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
+                  No results found.
+                </p>
+              </div>
+            ) : null}
             {results.map((item, idx) => {
               const { pageEvent, score, layer } = item
               const opened = pageEvent.openedAt || pageEvent.timestamp
@@ -333,30 +380,13 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
           </div>
         ) : (
           <div className="flex flex-col p-0.5">
-            <DaySection
-              dayKey="today"
-              dayLabel="Today"
-              sessions={realSessionsByDay.today}
-              isExpanded={expandedDays.includes("today")}
-              onToggleDay={(key) => {
-                setExpandedDays((prev) =>
-                  prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]
-                )
-              }}
-              expandedSessions={expandedSessions}
-              onToggleSession={(id) => {
-                setExpandedSessions((prev) =>
-                  prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
-                )
-              }}
-            />
-            
-            {realSessionsByDay.yesterday.length > 0 && (
+            {realSessionsByDay.map((dayGroup, dayIndex) => (
               <DaySection
-                dayKey="yesterday"
-                dayLabel="Yesterday"
-                sessions={realSessionsByDay.yesterday}
-                isExpanded={expandedDays.includes("yesterday")}
+                key={dayGroup.label}
+                dayKey={dayGroup.label}
+                dayLabel={dayGroup.label}
+                sessions={dayGroup.sessions}
+                isExpanded={expandedDays.includes(dayGroup.label)}
                 onToggleDay={(key) => {
                   setExpandedDays((prev) =>
                     prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]
@@ -369,27 +399,7 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
                   )
                 }}
               />
-            )}
-
-            {realSessionsByDay.older.length > 0 && (
-              <DaySection
-                dayKey="older"
-                dayLabel="📅 DATES +"
-                sessions={realSessionsByDay.older}
-                isExpanded={expandedDays.includes("older")}
-                onToggleDay={(key) => {
-                  setExpandedDays((prev) =>
-                    prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]
-                  )
-                }}
-                expandedSessions={expandedSessions}
-                onToggleSession={(id) => {
-                  setExpandedSessions((prev) =>
-                    prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
-                  )
-                }}
-              />
-            )}
+            ))}
           </div>
         )}
         
