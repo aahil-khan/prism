@@ -16,10 +16,17 @@ import {
   getBehaviorState
 } from "./ephemeralBehavior"
 import { computePageCoi, computeSessionCoi, loadCoiWeights } from "~/lib/coi"
+import { buildKnowledgeGraph, type KnowledgeGraph } from "~/lib/knowledge-graph"
+import type { PageEvent } from "~/types/page-event"
+
+// Graph state
+let knowledgeGraph: KnowledgeGraph | null = null
+let graphNeedsRebuild = true
 
 // Initialize sessions from IndexedDB on startup
 initializeSessions().then(() => {
-  console.log("✅ Sessions initialized from IndexedDB")
+  console.log("[Background] Sessions initialized from IndexedDB")
+  rebuildGraphIfNeeded()
 })
 
 // Initialize all listeners
@@ -47,6 +54,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "GET_SESSIONS") {
     const sessions = getSessions()
     sendResponse({ sessions })
+    return true
+  }
+
+  if (message.type === "GET_GRAPH") {
+    rebuildGraphIfNeeded()
+    sendResponse({ graph: knowledgeGraph })
+    return true
+  }
+
+  if (message.type === "REFRESH_GRAPH") {
+    graphNeedsRebuild = true
+    rebuildGraphIfNeeded()
+    sendResponse({ graph: knowledgeGraph })
     return true
   }
 
@@ -113,8 +133,43 @@ async function broadcastCoiUpdate() {
       },
     })
   } catch (err) {
-    console.warn("Failed to broadcast COI update", err)
+    console.warn("[Background] Failed to broadcast COI update", err)
   }
+}
+
+function rebuildGraphIfNeeded() {
+  if (!graphNeedsRebuild && knowledgeGraph !== null) {
+    return
+  }
+
+  try {
+    const sessions = getSessions()
+    const allPages: PageEvent[] = []
+    
+    for (const session of sessions) {
+      allPages.push(...session.pages)
+    }
+
+    console.log("[Background] Rebuilding knowledge graph from pages:", allPages.length)
+    
+    knowledgeGraph = buildKnowledgeGraph(allPages, {
+      similarityThreshold: 0.35,
+      maxEdgesPerNode: 8,
+      maxNodes: 500
+    })
+    
+    graphNeedsRebuild = false
+    
+    console.log("[Background] Graph rebuilt with nodes:", knowledgeGraph.nodes.length, "edges:", knowledgeGraph.edges.length)
+  } catch (err) {
+    console.error("[Background] Failed to rebuild knowledge graph:", err)
+    knowledgeGraph = { nodes: [], edges: [], lastUpdated: Date.now() }
+  }
+}
+
+// Mark graph for rebuild when new page visits occur
+export function markGraphForRebuild() {
+  graphNeedsRebuild = true
 }
 
 export {}

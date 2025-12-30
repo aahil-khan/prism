@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, useRef } from "react"
 import type { PageEvent } from "~/types/page-event"
 import type { Session } from "~/types/session"
 import { CoiPanel } from "./CoiPanel"
+import { GraphPanel } from "./GraphPanel"
 
 // Mock filter data - will be fetched from API
 const MOCK_FILTERS = [
@@ -238,6 +239,7 @@ interface PopulatedStateProps {
 }
 
 export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
+  const [activeTab, setActiveTab] = useState<"sessions" | "graph">("sessions")
   const [sessions, setSessions] = useState<Session[]>([])
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
@@ -401,8 +403,44 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
         <CoiPanel sessions={sessions} />
       </div>
 
+      {/* Tabs */}
+      <div className="px-3 pt-3 flex gap-1 border-b" style={{ borderColor: '#E5E5E5' }}>
+        <button
+          onClick={() => setActiveTab("sessions")}
+          className={`px-4 py-2 text-sm font-medium transition-all rounded-t-lg ${
+            activeTab === "sessions" ? "" : "opacity-60"
+          }`}
+          style={{
+            backgroundColor: activeTab === "sessions" ? "white" : "transparent",
+            color: activeTab === "sessions" ? "#0072de" : "#64748b",
+            borderBottom: activeTab === "sessions" ? "2px solid #0072de" : "none",
+            fontFamily: "'Breeze Sans'"
+          }}>
+          Sessions
+        </button>
+        <button
+          onClick={() => setActiveTab("graph")}
+          className={`px-4 py-2 text-sm font-medium transition-all rounded-t-lg ${
+            activeTab === "graph" ? "" : "opacity-60"
+          }`}
+          style={{
+            backgroundColor: activeTab === "graph" ? "white" : "transparent",
+            color: activeTab === "graph" ? "#0072de" : "#64748b",
+            borderBottom: activeTab === "graph" ? "2px solid #0072de" : "none",
+            fontFamily: "'Breeze Sans'"
+          }}>
+          Knowledge Graph
+        </button>
+      </div>
+
       {/* Content */}
       <div className="flex-1 flex flex-col gap-0 overflow-y-auto">
+        {activeTab === "graph" ? (
+          <div className="p-3">
+            <GraphPanel />
+          </div>
+        ) : (
+          <>
         {/* Sticky Search & Filters */}
         <div className="sticky top-0 z-20 bg-white px-2 pt-1 pb-2 -mx-0" style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
           {/* Search Bar */}
@@ -572,6 +610,8 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
           style={{ color: 'var(--gray)', fontFamily: "'Breeze Sans'" }}>
           Show empty state (dev)
         </button>
+        </>
+        )}
       </div>
     </div>
   )

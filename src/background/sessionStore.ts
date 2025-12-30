@@ -1,7 +1,7 @@
 import type { Session } from "~/types/session"
 
 const DB_NAME = "aegis-sessions"
-const DB_VERSION = 1
+const DB_VERSION = 2
 const STORE_NAME = "sessions"
 const RECORD_KEY = "all-sessions"
 

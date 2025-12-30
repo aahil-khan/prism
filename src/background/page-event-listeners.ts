@@ -2,6 +2,7 @@ import { processPageEvent, getSessions } from "./sessionManager"
 import { getBehaviorState } from "./ephemeralBehavior"
 import { generateEmbedding } from "./embedding-engine"
 import { checkAndNotifySimilarPages } from "./similarity-notifier"
+import { markGraphForRebuild } from "./index"
 
 // Listen for PAGE_VISITED events from content script
 export const setupPageVisitListener = () => {
@@ -12,8 +13,8 @@ export const setupPageVisitListener = () => {
         openedAt: message.payload.openedAt ?? message.payload.timestamp
       }
 
-      console.log("PAGE_VISITED:", baseEvent)
-      console.log("Behavior State:", getBehaviorState())
+      console.log("[PageEvent] PAGE_VISITED:", baseEvent)
+      console.log("[PageEvent] Behavior State:", getBehaviorState())
 
       ;(async () => {
         try {
@@ -36,17 +37,20 @@ export const setupPageVisitListener = () => {
             const titleEmbedding = await generateEmbedding(baseEvent.title)
             if (titleEmbedding) {
               baseEvent.titleEmbedding = titleEmbedding
-              console.log("Embedding generated for title:", baseEvent.title)
+              console.log("[PageEvent] Embedding generated for title:", baseEvent.title)
             }
           }
 
           await processPageEvent(baseEvent)
 
+          // Mark graph for rebuild after page event is processed
+          markGraphForRebuild()
+
           // Check for and notify about similar pages (pass sender tab ID)
           const tabId = sender.tab?.id
           await checkAndNotifySimilarPages(baseEvent, tabId)
         } catch (error) {
-          console.error("Failed to process page event:", error)
+          console.error("[PageEvent] Failed to process page event:", error)
         }
       })()
 
