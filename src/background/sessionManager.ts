@@ -3,8 +3,13 @@ import type { Session } from "~/types/session"
 import { loadSessions, saveSessions } from "./sessionStore"
 import { checkSessionChange } from "./ephemeralBehavior"
 import { inferSessionTitle } from "~/lib/session-title-inference"
+import { classifyPageContext, isSameContext } from "~/lib/context-classifier"
+import { learnFromSession } from "./contextLearning"
 
-const SESSION_GAP_MS = 30 * 60 * 1000 // 30 minutes
+// Sessionization thresholds
+const SESSION_GAP_MS = 30 * 60 * 1000 // 30 minutes - inactivity creates new session
+const MAX_SESSION_DURATION_MS = 2 * 60 * 60 * 1000 // 2 hours - force split after this duration
+const CONTEXT_SWITCH_THRESHOLD_MS = 5 * 60 * 1000 // 5 minutes - context change with short gap
 
 let sessions: Session[] = []
 let isInitialized = false
@@ -64,8 +69,42 @@ function getLastSession(): Session | undefined {
 }
 
 /**
+ * Determine if a new session should be started based on hybrid criteria:
+ * 1. Time gap exceeds 30 minutes (inactivity)
+ * 2. Session duration exceeds 2 hours (force split for manageability)
+ * 3. Context switch detected (different activity type after 5+ minute gap)
+ */
+function shouldStartNewSession(
+  lastSession: Session,
+  newPageEvent: PageEvent
+): boolean {
+  const timeSinceLastEvent = newPageEvent.timestamp - lastSession.endTime
+  const sessionDuration = lastSession.endTime - lastSession.startTime
+
+  // Criterion 1: Long inactivity gap (30+ minutes)
+  if (timeSinceLastEvent > SESSION_GAP_MS) {
+    return true
+  }
+
+  // Criterion 2: Maximum session duration exceeded (2+ hours)
+  if (sessionDuration > MAX_SESSION_DURATION_MS) {
+    return true
+  }
+
+  // Criterion 3: Context switch with moderate gap (5+ minutes)
+  if (timeSinceLastEvent > CONTEXT_SWITCH_THRESHOLD_MS) {
+    const lastPage = lastSession.pages[lastSession.pages.length - 1]
+    if (lastPage && !isSameContext(lastPage, newPageEvent)) {
+      return true
+    }
+  }
+
+  return false
+}
+
+/**
  * Process a page event and add it to a session
- * Creates a new session if the gap from the last event exceeds SESSION_GAP_MS
+ * Uses hybrid sessionization: time gaps, duration limits, and context switching
  */
 export async function processPageEvent(pageEvent: PageEvent): Promise<void> {
   const lastSession = getLastSession()
@@ -82,9 +121,8 @@ export async function processPageEvent(pageEvent: PageEvent): Promise<void> {
     sessions.push(newSession)
     checkSessionChange(newSession.id)
   } else {
-    // Check if we need to create a new session
-    const timeSinceLastEvent = pageEvent.timestamp - lastSession.endTime
-    if (timeSinceLastEvent > SESSION_GAP_MS) {
+    // Check if we need to create a new session using hybrid criteria
+    if (shouldStartNewSession(lastSession, pageEvent)) {
       // Create new session
       const newSession = {
         id: generateSessionId(),

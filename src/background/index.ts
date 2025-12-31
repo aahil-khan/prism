@@ -8,7 +8,8 @@ import {
 import { setupConsentListener } from "./consent-listener"
 import { getSessions, initializeSessions, updateSessionLabel } from "./sessionManager"
 import { executeSearch } from "./search-coordinator"
-import { loadLabels, addLabel, deleteLabel } from "./labelsStore"
+import { loadLabels, addLabel, deleteLabel, getLabelById } from "./labelsStore"
+import { loadLearnedAssociations, learnFromSession } from "./contextLearning"
 import { logSearchResults } from "~/lib/search-explainer"
 import {
   incrementTabSwitch,
@@ -31,6 +32,11 @@ let graphNeedsRebuild = true
 initializeSessions().then(() => {
   console.log("[Background] Sessions initialized from IndexedDB")
   rebuildGraphIfNeeded()
+})
+
+// Initialize learned context associations
+loadLearnedAssociations().then(() => {
+  console.log("[Background] Context learning initialized")
 })
 
 // Initialize all listeners
@@ -125,7 +131,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "UPDATE_SESSION_LABEL") {
     const { sessionId, labelId } = message.payload
     updateSessionLabel(sessionId, labelId)
-      .then(() => {
+      .then(async () => {
+        // Learn from this labeling behavior if a label was assigned
+        if (labelId) {
+          const session = getSessions().find(s => s.id === sessionId)
+          const label = await getLabelById(labelId)
+          if (session && label) {
+            await learnFromSession(session, label.name)
+          }
+        }
         sendResponse({ success: true })
         broadcastSessionUpdate()
       })
