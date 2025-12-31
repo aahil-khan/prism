@@ -1,10 +1,20 @@
 import React, { useEffect, useRef, useState } from "react"
-import { X } from "lucide-react"
+import { ArrowLeft, Search, ZoomIn, ZoomOut } from "lucide-react"
 import ForceGraph from "force-graph"
+import { knowledgeGraphData } from "./knowledgeGraphData"
 
 interface KnowledgeGraphPanelProps {
   isOpen: boolean
   onClose: () => void
+}
+
+const CATEGORY_COLORS: { [key: string]: string } = {
+  Research: "#1428A0",
+  Shopping: "#0066CC",
+  Development: "#004E98",
+  Entertainment: "#0099FF",
+  Productivity: "#0066CC",
+  Health: "#FF6B35",
 }
 
 export const KnowledgeGraphPanel: React.FC<KnowledgeGraphPanelProps> = ({
@@ -14,131 +24,39 @@ export const KnowledgeGraphPanel: React.FC<KnowledgeGraphPanelProps> = ({
   const containerRef = useRef<HTMLDivElement>(null)
   const graphRef = useRef<any>(null)
   const [selectedNode, setSelectedNode] = useState<any>(null)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [visibleNodes, setVisibleNodes] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     if (!isOpen || !containerRef.current) return
 
+    // Clear container before initializing
+    if (containerRef.current) {
+      containerRef.current.innerHTML = ""
+    }
+
     let hoveredNode: any = null
     const nodeScales = new Map()
 
-    const knowledgeGraphData = {
-      nodes: [
-        // Research & Learning Cluster
-        { id: "Research & Learning", category: "Research" },
-        { id: "Google Docs", category: "Research" },
-        { id: "Wikipedia", category: "Research" },
-        { id: "Stack Overflow", category: "Research" },
-        { id: "MDN Web Docs", category: "Research" },
-        { id: "GitHub", category: "Research" },
+    // Filter nodes based on search and category
+    const filteredNodes = knowledgeGraphData.nodes.filter((node) => {
+      const matchesSearch =
+        searchQuery === "" ||
+        node.id.toLowerCase().includes(searchQuery.toLowerCase())
+      const matchesCategory =
+        selectedCategory === null || node.category === selectedCategory
+      return matchesSearch && matchesCategory
+    })
 
-        // Shopping & E-commerce Cluster
-        { id: "Shopping & E-commerce", category: "Shopping" },
-        { id: "Amazon", category: "Shopping" },
-        { id: "Flipkart", category: "Shopping" },
-        { id: "eBay", category: "Shopping" },
-        { id: "Product Reviews", category: "Shopping" },
-        { id: "Price Comparison", category: "Shopping" },
+    const visibleNodeIds = new Set(filteredNodes.map((n) => n.id))
+    setVisibleNodes(visibleNodeIds)
 
-        // Development & Tools Cluster
-        { id: "Development Tools", category: "Development" },
-        { id: "VS Code", category: "Development" },
-        { id: "Figma Design", category: "Development" },
-        { id: "Slack Communication", category: "Development" },
-        { id: "Jira Project Management", category: "Development" },
-        { id: "NPM Registry", category: "Development" },
-
-        // Entertainment & Media Cluster
-        { id: "Entertainment & Media", category: "Entertainment" },
-        { id: "YouTube", category: "Entertainment" },
-        { id: "Netflix", category: "Entertainment" },
-        { id: "Twitter/X", category: "Entertainment" },
-        { id: "Reddit", category: "Entertainment" },
-        { id: "News Sites", category: "Entertainment" },
-
-        // Productivity & Organization Cluster
-        { id: "Productivity Tools", category: "Productivity" },
-        { id: "Notion", category: "Productivity" },
-        { id: "Google Calendar", category: "Productivity" },
-        { id: "Asana", category: "Productivity" },
-        { id: "Email", category: "Productivity" },
-        { id: "Cloud Storage", category: "Productivity" },
-
-        // Health & Wellness Cluster
-        { id: "Health & Wellness", category: "Health" },
-        { id: "Fitness Apps", category: "Health" },
-        { id: "Nutrition Info", category: "Health" },
-        { id: "Medical Resources", category: "Health" },
-        { id: "Mental Health", category: "Health" },
-      ],
-      links: [
-        // Research cluster internal
-        { source: "Research & Learning", target: "Google Docs" },
-        { source: "Research & Learning", target: "Wikipedia" },
-        { source: "Research & Learning", target: "Stack Overflow" },
-        { source: "Research & Learning", target: "MDN Web Docs" },
-        { source: "Research & Learning", target: "GitHub" },
-        { source: "Google Docs", target: "Stack Overflow" },
-        { source: "GitHub", target: "Stack Overflow" },
-        { source: "MDN Web Docs", target: "Google Docs" },
-
-        // Shopping cluster internal
-        { source: "Shopping & E-commerce", target: "Amazon" },
-        { source: "Shopping & E-commerce", target: "Flipkart" },
-        { source: "Shopping & E-commerce", target: "eBay" },
-        { source: "Shopping & E-commerce", target: "Product Reviews" },
-        { source: "Shopping & E-commerce", target: "Price Comparison" },
-        { source: "Amazon", target: "Product Reviews" },
-        { source: "Flipkart", target: "Price Comparison" },
-        { source: "eBay", target: "Product Reviews" },
-
-        // Development cluster internal
-        { source: "Development Tools", target: "VS Code" },
-        { source: "Development Tools", target: "Figma Design" },
-        { source: "Development Tools", target: "Slack Communication" },
-        { source: "Development Tools", target: "Jira Project Management" },
-        { source: "Development Tools", target: "NPM Registry" },
-        { source: "VS Code", target: "NPM Registry" },
-        { source: "Figma Design", target: "Slack Communication" },
-        { source: "Jira Project Management", target: "Slack Communication" },
-
-        // Entertainment cluster internal
-        { source: "Entertainment & Media", target: "YouTube" },
-        { source: "Entertainment & Media", target: "Netflix" },
-        { source: "Entertainment & Media", target: "Twitter/X" },
-        { source: "Entertainment & Media", target: "Reddit" },
-        { source: "Entertainment & Media", target: "News Sites" },
-        { source: "YouTube", target: "Netflix" },
-        { source: "Twitter/X", target: "Reddit" },
-        { source: "Reddit", target: "News Sites" },
-
-        // Productivity cluster internal
-        { source: "Productivity Tools", target: "Notion" },
-        { source: "Productivity Tools", target: "Google Calendar" },
-        { source: "Productivity Tools", target: "Asana" },
-        { source: "Productivity Tools", target: "Email" },
-        { source: "Productivity Tools", target: "Cloud Storage" },
-        { source: "Notion", target: "Asana" },
-        { source: "Google Calendar", target: "Email" },
-        { source: "Asana", target: "Cloud Storage" },
-
-        // Health cluster internal
-        { source: "Health & Wellness", target: "Fitness Apps" },
-        { source: "Health & Wellness", target: "Nutrition Info" },
-        { source: "Health & Wellness", target: "Medical Resources" },
-        { source: "Health & Wellness", target: "Mental Health" },
-        { source: "Fitness Apps", target: "Nutrition Info" },
-        { source: "Medical Resources", target: "Mental Health" },
-
-        // Cross-cluster connections (user navigation patterns)
-        { source: "Google Docs", target: "Notion" },
-        { source: "GitHub", target: "VS Code" },
-        { source: "Stack Overflow", target: "NPM Registry" },
-        { source: "Slack Communication", target: "Email" },
-        { source: "YouTube", target: "Google Docs" },
-        { source: "Product Reviews", target: "YouTube" },
-        { source: "Fitness Apps", target: "YouTube" },
-      ],
-    }
+    const filteredLinks = knowledgeGraphData.links.filter(
+      (link) =>
+        visibleNodeIds.has(link.source as string) &&
+        visibleNodeIds.has(link.target as string)
+    )
 
     const fg = (ForceGraph as any)()(containerRef.current)
       .width(containerRef.current.clientWidth)
@@ -147,24 +65,18 @@ export const KnowledgeGraphPanel: React.FC<KnowledgeGraphPanelProps> = ({
       .d3AlphaDecay(0.05)
       .d3VelocityDecay(0.4)
       .nodeId("id")
-      .nodeRelSize(2.5)
+      .nodeRelSize(6)
       .nodeVal((node: any) => {
         const currentScale = nodeScales.get(node.id) || 1
-        return node === hoveredNode ? 2.2 : currentScale
+        return node === hoveredNode ? 3 : currentScale
       })
       .nodeColor((node: any) => {
-        const colorMap: { [key: string]: string } = {
-          Research: "#3B82F6",
-          Shopping: "#8B5CF6",
-          Development: "#EC4899",
-          Entertainment: "#F59E0B",
-          Productivity: "#10B981",
-          Health: "#EF4444",
-        }
-        return colorMap[node.category] || "#3B82F6"
+        return CATEGORY_COLORS[node.category] || "#3B82F6"
       })
-      .linkColor(() => "rgba(100,100,150,0.3)")
-      .linkWidth(0.8)
+      .linkColor(() => "rgba(100,100,150,0.2)")
+      .linkWidth((link: any) => {
+        return 1
+      })
       .onNodeHover((node: any) => {
         hoveredNode = node
         document.body.style.cursor = node ? "pointer" : "default"
@@ -173,7 +85,7 @@ export const KnowledgeGraphPanel: React.FC<KnowledgeGraphPanelProps> = ({
           let needsUpdate = false
 
           fg.graphData().nodes.forEach((n: any) => {
-            const targetScale = n === hoveredNode ? 2.2 : 1
+            const targetScale = n === hoveredNode ? 3 : 1
             const currentScale = nodeScales.get(n.id) || 1
 
             if (Math.abs(currentScale - targetScale) > 0.01) {
@@ -202,18 +114,32 @@ export const KnowledgeGraphPanel: React.FC<KnowledgeGraphPanelProps> = ({
           const label = node.id
           const scale = nodeScales.get(node.id) || 1
           const fontSize = 6 + scale * 2
-          const yOffset = -10 - (scale - 1) * 3
+          const yOffset = -12 - (scale - 1) * 3
 
-          ctx.font = `${fontSize}px system-ui, sans-serif`
+          ctx.font = `500 ${fontSize}px system-ui, -apple-system, sans-serif`
           ctx.textAlign = "center"
           ctx.textBaseline = "middle"
 
-          ctx.fillStyle = "rgba(0,0,0,1)"
+          // Text background
+          const metrics = ctx.measureText(label)
+          const padding = 4
+          const bgWidth = metrics.width + padding * 2
+          const bgHeight = fontSize + padding
+
+          ctx.fillStyle = "rgba(255, 255, 255, 0.9)"
+          ctx.fillRect(
+            node.x - bgWidth / 2,
+            node.y + yOffset - bgHeight / 2,
+            bgWidth,
+            bgHeight
+          )
+
+          ctx.fillStyle = "rgba(0,0,0,0.85)"
           ctx.fillText(label, node.x, node.y + yOffset)
         }
       )
 
-    fg.graphData(knowledgeGraphData)
+    fg.graphData({ nodes: filteredNodes, links: filteredLinks })
     graphRef.current = fg
 
     const handleResize = () => {
@@ -229,59 +155,127 @@ export const KnowledgeGraphPanel: React.FC<KnowledgeGraphPanelProps> = ({
       window.removeEventListener("resize", handleResize)
       fg._destructor?.()
     }
-  }, [isOpen])
+  }, [isOpen, searchQuery, selectedCategory])
+
+  const handleZoom = (direction: "in" | "out") => {
+    if (graphRef.current) {
+      const currentZoom = graphRef.current.zoom()
+      const zoomFactor = direction === "in" ? 1.2 : 0.8
+      graphRef.current.zoom(currentZoom * zoomFactor, 300)
+    }
+  }
+
+  const handleResetView = () => {
+    if (graphRef.current) {
+      graphRef.current.zoomToFit(400)
+    }
+  }
 
   if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl h-[700px] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">
-              Knowledge Graph
-            </h2>
-            <p className="text-sm text-gray-600">
-              Explore interconnected concepts
-            </p>
+      <div className="bg-white rounded-lg shadow-2xl w-full max-w-6xl h-[750px] flex flex-col overflow-hidden">
+        {/* Header with Controls */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 border-b border-gray-200 bg-gradient-to-r from-slate-50 to-slate-100">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0"
+              title="Back"
+            >
+              <ArrowLeft className="h-5 w-5 text-gray-600" />
+            </button>
+            <div className="min-w-0">
+              <h2 className="text-xl font-bold text-gray-900 truncate">
+                Knowledge Graph
+              </h2>
+              <p className="text-sm text-gray-600 truncate">
+                Explore interconnected browsing patterns
+              </p>
+            </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-gray-100 rounded transition-colors"
-          >
-            <X className="h-5 w-5 text-gray-500" />
-          </button>
+          
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
+            {/* Search */}
+            <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-300">
+              <Search className="h-4 w-4 text-gray-400 flex-shrink-0" />
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="min-w-0 w-full sm:w-40 text-sm focus:outline-none"
+              />
+            </div>
+
+            {/* Category Filter */}
+            <select
+              value={selectedCategory || ""}
+              onChange={(e) =>
+                setSelectedCategory(e.target.value === "" ? null : e.target.value)
+              }
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+              <option value="">All Categories</option>
+              {Object.keys(CATEGORY_COLORS).map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        {/* Canvas Container */}
-        <div className="flex-1 overflow-hidden">
+        {/* Canvas */}
+        <div className="flex-1 overflow-hidden relative">
           <div
             ref={containerRef}
             style={{
               width: "100%",
               height: "100%",
-              display: "flex",
-              flexDirection: "column",
             }}
           />
-        </div>
 
-        {/* Info Panel */}
-        <div className="border-t border-gray-200 bg-gray-50 p-4 h-24 overflow-y-auto">
-          {selectedNode ? (
-            <div>
-              <h3 className="font-semibold text-gray-900">{selectedNode.id}</h3>
-              <p className="text-xs text-gray-500 mt-2">
-                Category: <span className="font-medium">{selectedNode.category}</span>
-              </p>
+          {/* Zoom Controls */}
+          <div className="absolute bottom-4 right-4 flex flex-col gap-1 bg-white border border-gray-300 rounded-lg shadow-lg p-1">
+            <button
+              onClick={() => handleZoom("in")}
+              className="p-2 hover:bg-gray-100 rounded transition-colors"
+              title="Zoom In"
+            >
+              <ZoomIn className="h-4 w-4 text-gray-600" />
+            </button>
+            <button
+              onClick={() => handleZoom("out")}
+              className="p-2 hover:bg-gray-100 rounded transition-colors"
+              title="Zoom Out"
+            >
+              <ZoomOut className="h-4 w-4 text-gray-600" />
+            </button>
+            <div className="border-t border-gray-300"></div>
+            <button
+              onClick={handleResetView}
+              className="px-2 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100 rounded transition-colors"
+              title="Reset View"
+            >
+              Reset
+            </button>
+          </div>
+          
+          {/* Info Tooltip */}
+          {selectedNode && (
+            <div className="absolute bottom-4 left-4 bg-white border border-gray-300 rounded-lg shadow-lg p-3 max-w-xs">
+              <p className="font-semibold text-gray-900 text-sm">{selectedNode.id}</p>
               <p className="text-xs text-gray-600 mt-1">
-                Click on nodes to explore connections
+                Category: <span style={{ color: CATEGORY_COLORS[selectedNode.category] }} className="font-medium">{selectedNode.category}</span>
               </p>
-            </div>
-          ) : (
-            <div className="text-gray-500 text-sm">
-              Hover over nodes to see details. Click on a node to select it.
+              <button
+                onClick={() => setSelectedNode(null)}
+                className="mt-2 text-xs text-gray-600 hover:text-gray-900"
+              >
+                ✕ Clear
+              </button>
             </div>
           )}
         </div>
