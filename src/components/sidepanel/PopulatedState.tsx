@@ -57,6 +57,7 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
   const [showAddLabelModal, setShowAddLabelModal] = useState(false)
   const [newLabelName, setNewLabelName] = useState("")
   const [newLabelColor, setNewLabelColor] = useState("#3B82F6")
+  const [showSettingsModal, setShowSettingsModal] = useState(false)
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
@@ -226,6 +227,61 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
     }
   }
 
+  const handleClearAllSessions = async () => {
+    if (!window.confirm("Are you sure you want to delete all sessions? This action cannot be undone.")) {
+      return
+    }
+    try {
+      await sendMessage<{ success: boolean }>({
+        type: "CLEAR_ALL_SESSIONS"
+      })
+      setSessions([])
+      setSelectedLabelId(null)
+      setExpandedDays([])
+      setExpandedSessions([])
+    } catch (err) {
+      console.error("Failed to clear sessions:", err)
+    }
+  }
+
+  const handleClearAllLabels = async () => {
+    if (!window.confirm("Are you sure you want to reset all labels to defaults? This action cannot be undone.")) {
+      return
+    }
+    try {
+      await sendMessage<{ success: boolean }>({
+        type: "RESET_LABELS_TO_DEFAULT"
+      })
+      const res = await sendMessage<{ labels: Label[] }>({ type: "GET_LABELS" })
+      setLabels(res?.labels ?? [])
+      setSelectedLabelId(null)
+    } catch (err) {
+      console.error("Failed to reset labels:", err)
+    }
+  }
+
+  const handleExportData = async () => {
+    try {
+      const dataToExport = {
+        sessions,
+        labels,
+        exportedAt: new Date().toISOString()
+      }
+      const jsonString = JSON.stringify(dataToExport, null, 2)
+      const blob = new Blob([jsonString], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `aegis-export-${new Date().getTime()}.json`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error("Failed to export data:", err)
+    }
+  }
+
   const MAX_OPEN_TABS = 10
   const openAllResults = () => {
     if (!results.length) return
@@ -256,6 +312,13 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
       {/* Header */}
       <div className="sticky top-0 z-10 flex items-center justify-between p-6 border-b bg-white" style={{ borderColor: '#E5E5E5' }}>
         <div className="flex items-center gap-3">
+          <button
+            onClick={onShowEmpty}
+            className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none"
+            style={{ color: 'var(--gray)' }}>
+            <ArrowLeft className="h-5 w-5" />
+            <span className="sr-only">Back</span>
+          </button>
           <div className="w-8 h-8 rounded-lg flex-shrink-0" style={{ backgroundColor: 'var(--primary)' }} />
           <h1 
             className="text-xl font"
@@ -266,7 +329,7 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
         
         {/* Settings Button */}
         <button
-          onClick={() => {}}
+          onClick={() => setShowSettingsModal(true)}
           className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none"
           style={{ color: 'var(--gray)' }}>
           <Settings className="h-5 w-5" />
@@ -499,18 +562,19 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
             ))}
           </div>
         )}
-        
-        <button
-          onClick={onShowEmpty}
-          className="mt-4 text-xs underline underline-offset-4 opacity-70 transition-opacity hover:opacity-100"
-          style={{ color: 'var(--gray)', fontFamily: "'Breeze Sans'" }}>
-          Show empty state (dev)
-        </button>
         </>
         )}
       </div>
 
-      {/* Add Label Modal */}
+      {/* Footer */}
+      <div className="sticky bottom-0 border-t bg-white px-4 py-3" style={{ borderColor: '#E5E5E5' }}>
+        <button
+          onClick={onShowEmpty}
+          className="w-full text-xs opacity-70 transition-opacity hover:opacity-100"
+          style={{ color: 'var(--gray)', fontFamily: "'Breeze Sans'" }}>
+          ← Back to empty state
+        </button>
+      </div>
       {showAddLabelModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
           <div className="bg-white rounded-lg p-6 w-80 shadow-lg">
@@ -582,6 +646,148 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
                   Create
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Modal */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-lg p-6 w-96 shadow-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold" style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
+                Settings
+              </h2>
+              <button
+                onClick={() => setShowSettingsModal(false)}
+                className="p-1 hover:bg-blue-100 rounded transition-colors"
+                style={{ color: '#0072df' }}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              {/* Data Management Section */}
+              <div className="pb-4 border-b" style={{ borderColor: '#E5E5E5' }}>
+                <h3 className="text-sm font-semibold mb-3" style={{ color: '#0072df', fontFamily: "'Breeze Sans'" }}>
+                  Data Management
+                </h3>
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={() => {
+                      handleExportData()
+                      setShowSettingsModal(false)
+                    }}
+                    className="w-full text-left px-4 py-3 rounded-lg text-sm transition-all hover:bg-blue-50 border"
+                    style={{ 
+                      color: '#0072df', 
+                      fontFamily: "'Breeze Sans'",
+                      borderColor: '#E5E5E5',
+                      backgroundColor: '#FFFFFF'
+                    }}>
+                    <div className="font-medium flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Export Data
+                    </div>
+                    <div className="text-xs" style={{ color: '#9A9FA6', marginTop: '4px' }}>
+                      Download all sessions and labels as JSON
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleClearAllSessions()
+                      setShowSettingsModal(false)
+                    }}
+                    className="w-full text-left px-4 py-3 rounded-lg text-sm transition-all hover:bg-red-50 border"
+                    style={{ 
+                      color: '#d32f2f', 
+                      fontFamily: "'Breeze Sans'",
+                      borderColor: '#ffcdd2',
+                      backgroundColor: '#fff5f5'
+                    }}>
+                    <div className="font-medium flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      Clear All Sessions
+                    </div>
+                    <div className="text-xs" style={{ color: '#c62828', marginTop: '4px' }}>
+                      Permanently delete all recorded sessions
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Labels Section */}
+              <div className="pb-4 border-b" style={{ borderColor: '#E5E5E5' }}>
+                <h3 className="text-sm font-semibold mb-3" style={{ color: '#0072df', fontFamily: "'Breeze Sans'" }}>
+                  Labels
+                </h3>
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={() => {
+                      handleClearAllLabels()
+                      setShowSettingsModal(false)
+                    }}
+                    className="w-full text-left px-4 py-3 rounded-lg text-sm transition-all hover:bg-amber-50 border"
+                    style={{ 
+                      color: '#f57c00', 
+                      fontFamily: "'Breeze Sans'",
+                      borderColor: '#ffe0b2',
+                      backgroundColor: '#fff8e1'
+                    }}>
+                    <div className="font-medium flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Reset Labels to Default
+                    </div>
+                    <div className="text-xs" style={{ color: '#e65100', marginTop: '4px' }}>
+                      Restore default label set and remove custom labels
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* About Section */}
+              <div>
+                <h3 className="text-sm font-semibold mb-3" style={{ color: '#0072df', fontFamily: "'Breeze Sans'" }}>
+                  About
+                </h3>
+                <div className="px-4 py-3 rounded-lg border" style={{ backgroundColor: '#F0F7FF', borderColor: '#B3D9FF' }}>
+                  <div className="text-xs" style={{ color: '#0072df', fontFamily: "'Breeze Sans'" }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span>Sessions recorded:</span>
+                      <strong style={{ fontSize: '0.875rem', color: '#0072df' }}>{sessions.length}</strong>
+                    </div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span>Total labels:</span>
+                      <strong style={{ fontSize: '0.875rem', color: '#0072df' }}>{labels.length}</strong>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Pages indexed:</span>
+                      <strong style={{ fontSize: '0.875rem', color: '#0072df' }}>{pages.length}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex gap-2 justify-end">
+              <button
+                onClick={() => setShowSettingsModal(false)}
+                className="px-4 py-2 text-xs rounded-lg transition-all font-medium border"
+                style={{
+                  backgroundColor: '#0072df',
+                  color: '#FFFFFF',
+                  fontFamily: "'Breeze Sans'",
+                  borderColor: '#0072df'
+                }}>
+                Close
+              </button>
             </div>
           </div>
         </div>
@@ -821,7 +1027,10 @@ function SessionItem({ session, isExpanded, onToggle, labels, onUpdateSessionLab
         </div>
         {/* Expand/Collapse Icon */}
         <button
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggle()
+          }}
           className="p-1 hover:bg-gray-100 rounded transition-colors">
           <ChevronDown
             className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
