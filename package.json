@@ -41,14 +41,16 @@
       "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
     },
     "host_permissions": [
-      "https://*/*"
+      "<all_urls>"
     ],
     "permissions": [
       "tabs",
       "tabGroups",
       "sidePanel",
       "storage",
-      "notifications"
+      "notifications",
+      "declarativeNetRequest",
+      "declarativeNetRequestFeedback"
     ],
     "side_panel": {
       "default_path": "sidepanel.html"
