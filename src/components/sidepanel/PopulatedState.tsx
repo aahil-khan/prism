@@ -58,6 +58,8 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
   const [newLabelName, setNewLabelName] = useState("")
   const [newLabelColor, setNewLabelColor] = useState("#3B82F6")
   const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const [darkMode, setDarkMode] = useState(false)
+  const [enableNotifications, setEnableNotifications] = useState(true)
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
@@ -668,45 +670,118 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
             </div>
 
             <div className="flex flex-col gap-4">
+              {/* Preferences Section */}
+              <div className="pb-4 border-b" style={{ borderColor: '#E5E5E5' }}>
+                <h3 className="text-sm font-normal mb-3" style={{ color: '#0072df', fontFamily: "'Breeze Sans'" }}>
+                  Preferences
+                </h3>
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={() => setDarkMode(!darkMode)}
+                    className="w-full text-left px-4 py-3 rounded-lg text-sm transition-all hover:bg-gray-50 border flex items-center justify-between"
+                    style={{ 
+                      color: '#080A0B', 
+                      fontFamily: "'Breeze Sans'",
+                      borderColor: '#E5E5E5',
+                      backgroundColor: '#FFFFFF'
+                    }}>
+                    <div>
+                      <div className="font-medium flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m6.364 1.636l-.707-.707M21 12h-1m1.364 6.364l-.707-.707M12 21v1m-6.364-1.636l.707-.707M3 12h1M3.636 5.636l.707-.707" />
+                        </svg>
+                        Dark Mode
+                      </div>
+                      <div className="text-xs" style={{ color: '#9A9FA6', marginTop: '4px' }}>
+                        Toggle dark theme
+                      </div>
+                    </div>
+                    <div 
+                      style={{ 
+                        width: '40px', 
+                        height: '20px', 
+                        backgroundColor: darkMode ? '#0072df' : '#E5E5E5', 
+                        borderRadius: '10px',
+                        transition: 'background-color 0.3s',
+                        position: 'relative',
+                        display: 'flex',
+                        alignItems: 'center',
+                        paddingLeft: darkMode ? '20px' : '2px'
+                      }}>
+                      <div 
+                        style={{ 
+                          width: '16px', 
+                          height: '16px', 
+                          backgroundColor: 'white', 
+                          borderRadius: '50%',
+                          transition: 'all 0.3s'
+                        }} 
+                      />
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setEnableNotifications(!enableNotifications)}
+                    className="w-full text-left px-4 py-3 rounded-lg text-sm transition-all hover:bg-gray-50 border flex items-center justify-between"
+                    style={{ 
+                      color: '#080A0B', 
+                      fontFamily: "'Breeze Sans'",
+                      borderColor: '#E5E5E5',
+                      backgroundColor: '#FFFFFF'
+                    }}>
+                    <div>
+                      <div className="font-medium flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                        </svg>
+                        Notifications
+                      </div>
+                      <div className="text-xs" style={{ color: '#9A9FA6', marginTop: '4px' }}>
+                        Enable notifications for similar content
+                      </div>
+                    </div>
+                    <div 
+                      style={{ 
+                        width: '40px', 
+                        height: '20px', 
+                        backgroundColor: enableNotifications ? '#0072df' : '#E5E5E5', 
+                        borderRadius: '10px',
+                        transition: 'background-color 0.3s',
+                        position: 'relative',
+                        display: 'flex',
+                        alignItems: 'center',
+                        paddingLeft: enableNotifications ? '20px' : '2px'
+                      }}>
+                      <div 
+                        style={{ 
+                          width: '16px', 
+                          height: '16px', 
+                          backgroundColor: 'white', 
+                          borderRadius: '50%',
+                          transition: 'all 0.3s'
+                        }} 
+                      />
+                    </div>
+                  </button>
+                </div>
+              </div>
+
               {/* Data Management Section */}
               <div className="pb-4 border-b" style={{ borderColor: '#E5E5E5' }}>
-                <h3 className="text-sm font-semibold mb-3" style={{ color: '#0072df', fontFamily: "'Breeze Sans'" }}>
+                <h3 className="text-sm font-normal mb-3" style={{ color: '#0072df', fontFamily: "'Breeze Sans'" }}>
                   Data Management
                 </h3>
                 <div className="flex flex-col gap-2">
                   <button
                     onClick={() => {
-                      handleExportData()
-                      setShowSettingsModal(false)
-                    }}
-                    className="w-full text-left px-4 py-3 rounded-lg text-sm transition-all hover:bg-blue-50 border"
-                    style={{ 
-                      color: '#0072df', 
-                      fontFamily: "'Breeze Sans'",
-                      borderColor: '#E5E5E5',
-                      backgroundColor: '#FFFFFF'
-                    }}>
-                    <div className="font-medium flex items-center gap-2">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
-                      Export Data
-                    </div>
-                    <div className="text-xs" style={{ color: '#9A9FA6', marginTop: '4px' }}>
-                      Download all sessions and labels as JSON
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => {
                       handleClearAllSessions()
                       setShowSettingsModal(false)
                     }}
-                    className="w-full text-left px-4 py-3 rounded-lg text-sm transition-all hover:bg-red-50 border"
+                    className="w-full text-left px-4 py-3 rounded-lg text-sm transition-all hover:bg-gray-50 border"
                     style={{ 
-                      color: '#d32f2f', 
+                      color: '#080A0B', 
                       fontFamily: "'Breeze Sans'",
-                      borderColor: '#ffcdd2',
-                      backgroundColor: '#fff5f5'
+                      borderColor: '#E5E5E5',
+                      backgroundColor: '#FFFFFF'
                     }}>
                     <div className="font-medium flex items-center gap-2">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -714,7 +789,7 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
                       </svg>
                       Clear All Sessions
                     </div>
-                    <div className="text-xs" style={{ color: '#c62828', marginTop: '4px' }}>
+                    <div className="text-xs" style={{ color: '#9A9FA6', marginTop: '4px' }}>
                       Permanently delete all recorded sessions
                     </div>
                   </button>
@@ -723,7 +798,7 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
 
               {/* Labels Section */}
               <div className="pb-4 border-b" style={{ borderColor: '#E5E5E5' }}>
-                <h3 className="text-sm font-semibold mb-3" style={{ color: '#0072df', fontFamily: "'Breeze Sans'" }}>
+                <h3 className="text-sm font-normal mb-3" style={{ color: '#0072df', fontFamily: "'Breeze Sans'" }}>
                   Labels
                 </h3>
                 <div className="flex flex-col gap-2">
@@ -732,12 +807,12 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
                       handleClearAllLabels()
                       setShowSettingsModal(false)
                     }}
-                    className="w-full text-left px-4 py-3 rounded-lg text-sm transition-all hover:bg-amber-50 border"
+                    className="w-full text-left px-4 py-3 rounded-lg text-sm transition-all hover:bg-gray-50 border"
                     style={{ 
-                      color: '#f57c00', 
+                      color: '#080A0B', 
                       fontFamily: "'Breeze Sans'",
-                      borderColor: '#ffe0b2',
-                      backgroundColor: '#fff8e1'
+                      borderColor: '#E5E5E5',
+                      backgroundColor: '#FFFFFF'
                     }}>
                     <div className="font-medium flex items-center gap-2">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -745,7 +820,7 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
                       </svg>
                       Reset Labels to Default
                     </div>
-                    <div className="text-xs" style={{ color: '#e65100', marginTop: '4px' }}>
+                    <div className="text-xs" style={{ color: '#9A9FA6', marginTop: '4px' }}>
                       Restore default label set and remove custom labels
                     </div>
                   </button>
@@ -754,22 +829,22 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
 
               {/* About Section */}
               <div>
-                <h3 className="text-sm font-semibold mb-3" style={{ color: '#0072df', fontFamily: "'Breeze Sans'" }}>
+                <h3 className="text-sm font-normal mb-3" style={{ color: '#0072df', fontFamily: "'Breeze Sans'" }}>
                   About
                 </h3>
-                <div className="px-4 py-3 rounded-lg border" style={{ backgroundColor: '#F0F7FF', borderColor: '#B3D9FF' }}>
-                  <div className="text-xs" style={{ color: '#0072df', fontFamily: "'Breeze Sans'" }}>
+                <div className="px-4 py-3 rounded-lg border" style={{ backgroundColor: '#F5F5F5', borderColor: '#E5E5E5' }}>
+                  <div className="text-xs" style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
                     <div className="flex items-center justify-between mb-2">
-                      <span>Sessions recorded:</span>
-                      <strong style={{ fontSize: '0.875rem', color: '#0072df' }}>{sessions.length}</strong>
+                      <span style={{ color: '#9A9FA6' }}>Sessions recorded:</span>
+                      <span className="font-normal" style={{ fontSize: '0.875rem', color: '#080A0B' }}>{sessions.length}</span>
                     </div>
                     <div className="flex items-center justify-between mb-2">
-                      <span>Total labels:</span>
-                      <strong style={{ fontSize: '0.875rem', color: '#0072df' }}>{labels.length}</strong>
+                      <span style={{ color: '#9A9FA6' }}>Total labels:</span>
+                      <span className="font-normal" style={{ fontSize: '0.875rem', color: '#080A0B' }}>{labels.length}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span>Pages indexed:</span>
-                      <strong style={{ fontSize: '0.875rem', color: '#0072df' }}>{pages.length}</strong>
+                      <span style={{ color: '#9A9FA6' }}>Pages indexed:</span>
+                      <span className="font-normal" style={{ fontSize: '0.875rem', color: '#080A0B' }}>{pages.length}</span>
                     </div>
                   </div>
                 </div>
@@ -786,7 +861,7 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
                   fontFamily: "'Breeze Sans'",
                   borderColor: '#0072df'
                 }}>
-                Close
+                Save Changes
               </button>
             </div>
           </div>
