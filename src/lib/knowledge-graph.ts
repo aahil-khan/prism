@@ -39,6 +39,76 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   return denominator === 0 ? 0 : dotProduct / denominator
 }
 
+// Filter out authentication, login, and non-content pages
+function isUtilityPage(page: PageEvent): boolean {
+  const titleLower = page.title.toLowerCase()
+  const urlLower = page.url.toLowerCase()
+  
+  const utilityPatterns = [
+    // Authentication & Login
+    /sign\s*in/i,
+    /log\s*in/i,
+    /login/i,
+    /signin/i,
+    /authenticate/i,
+    /authentication/i,
+    
+    // Account creation
+    /sign\s*up/i,
+    /signup/i,
+    /create\s*account/i,
+    /register/i,
+    /registration/i,
+    
+    // Password & Security
+    /password\s*reset/i,
+    /forgot\s*password/i,
+    /reset\s*password/i,
+    /verify/i,
+    /verification/i,
+    /two.factor/i,
+    /2fa/i,
+    
+    // OAuth & SSO
+    /oauth/i,
+    /sso/i,
+    /authorize/i,
+    /consent/i,
+    
+    // Generic utility pages
+    /^(404|403|500|error)/i,
+    /page\s*not\s*found/i,
+    /access\s*denied/i,
+    /cookie\s*(policy|consent)/i,
+    /privacy\s*policy/i,
+    /terms\s*(of\s*service|and\s*conditions)/i,
+    /about\s*blank/i,
+  ]
+  
+  // Check if title or URL matches any utility pattern
+  if (utilityPatterns.some(pattern => 
+    pattern.test(titleLower) || pattern.test(urlLower)
+  )) {
+    return true
+  }
+  
+  // Filter out domain-only pages (homepages without specific content)
+  try {
+    const url = new URL(page.url)
+    const path = url.pathname
+    const hasParams = url.search.length > 0
+    
+    // If path is just "/" or empty and no query params, it's likely just a domain homepage
+    if ((path === '/' || path === '') && !hasParams) {
+      return true
+    }
+  } catch (e) {
+    // Invalid URL, skip filtering
+  }
+  
+  return false
+}
+
 // Build sparse similarity graph from pages
 export function buildKnowledgeGraph(
   pages: PageEvent[],
@@ -56,18 +126,38 @@ export function buildKnowledgeGraph(
 
   console.log("[KnowledgeGraph] Building graph from pages:", pages.length)
 
-  // Deduplicate by URL, keeping latest visit
+  // Filter out utility pages (login, auth, error pages, etc.)
+  const contentPages = pages.filter(page => !isUtilityPage(page))
+  console.log("[KnowledgeGraph] Filtered out utility pages:", pages.length - contentPages.length)
+
+  // First deduplicate by URL, keeping latest visit
   const pageMap = new Map<string, PageEvent>()
-  for (const page of pages) {
+  for (const page of contentPages) {
     const existing = pageMap.get(page.url)
     if (!existing || page.timestamp > existing.timestamp) {
       pageMap.set(page.url, page)
     }
   }
 
-  // Filter pages with embeddings and apply maxNodes limit
-  const validPages = Array.from(pageMap.values())
+  // Filter pages with embeddings
+  const pagesWithEmbeddings = Array.from(pageMap.values())
     .filter(p => p.titleEmbedding && p.titleEmbedding.length > 0)
+    .sort((a, b) => b.timestamp - a.timestamp)
+
+  // Now merge by title - aggregate visit counts for same titles
+  const titleMap = new Map<string, PageEvent>()
+  for (const page of pagesWithEmbeddings) {
+    const existing = titleMap.get(page.title)
+    if (existing) {
+      // Merge: keep the most recent one, but sum visit counts
+      existing.visitCount = (existing.visitCount || 1) + (page.visitCount || 1)
+    } else {
+      titleMap.set(page.title, { ...page })
+    }
+  }
+
+  // Apply maxNodes limit
+  const validPages = Array.from(titleMap.values())
     .sort((a, b) => b.timestamp - a.timestamp)
     .slice(0, maxNodes)
 
@@ -77,9 +167,9 @@ export function buildKnowledgeGraph(
     return { nodes: [], edges: [], lastUpdated: Date.now() }
   }
 
-  // Build nodes
+  // Build nodes (using title as ID now)
   const nodes: GraphNode[] = validPages.map(page => ({
-    id: page.url,
+    id: page.title, // Use title as ID to ensure uniqueness by title
     title: page.title,
     url: page.url,
     domain: page.domain,
@@ -100,7 +190,7 @@ export function buildKnowledgeGraph(
       const similarity = cosineSimilarity(pageA.titleEmbedding!, pageB.titleEmbedding!)
 
       if (similarity >= similarityThreshold) {
-        neighbors.push({ target: pageB.url, similarity })
+        neighbors.push({ target: pageB.title, similarity }) // Use title instead of url
       }
     }
 
@@ -108,11 +198,11 @@ export function buildKnowledgeGraph(
     neighbors.sort((a, b) => b.similarity - a.similarity)
     const topNeighbors = neighbors.slice(0, maxEdgesPerNode)
     
-    edgesByNode.set(pageA.url, topNeighbors)
+    edgesByNode.set(pageA.title, topNeighbors) // Use title instead of url
 
     for (const neighbor of topNeighbors) {
       edges.push({
-        source: pageA.url,
+        source: pageA.title, // Use title instead of url
         target: neighbor.target,
         similarity: neighbor.similarity
       })

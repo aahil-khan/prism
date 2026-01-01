@@ -84,13 +84,18 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
     loadSessions()
 
     // Poll for session updates every 2 seconds to catch real-time changes
-    const pollInterval = setInterval(loadSessions, 2000)
+    // Only poll when on sessions tab to avoid graph disruption
+    const pollInterval = setInterval(() => {
+      if (activeTab === "sessions") {
+        loadSessions()
+      }
+    }, 2000)
 
     // Cleanup: stop polling on unmount
     return () => {
       clearInterval(pollInterval)
     }
-  }, [])
+  }, [activeTab])
 
   const pages = useMemo(() => {
     return sessions.flatMap((s) => s.pages)

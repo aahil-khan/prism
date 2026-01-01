@@ -25,17 +25,24 @@ export function GraphPanel() {
   const [searchQuery, setSearchQuery] = useState("")
   const [timeFilter, setTimeFilter] = useState<"all" | "today" | "week">("all")
   const [showFilters, setShowFilters] = useState(false)
-  const hoveredNodeRef = useRef<any>(null)
   const graphRef = useRef<any>()
   const containerRef = useRef<HTMLDivElement>(null)
   const [dimensions, setDimensions] = useState({ width: 500, height: 400 })
+  const hasUserInteractedRef = useRef(false)
+  const lastGraphTimestampRef = useRef<number>(0)
 
   const loadGraph = useCallback(async () => {
     setLoading(true)
     try {
       const response = await sendMessage<{ graph: KnowledgeGraph }>({ type: "GET_GRAPH" })
       if (response?.graph) {
-        setGraph(response.graph)
+        // Only update if graph has actually changed
+        if (response.graph.lastUpdated !== lastGraphTimestampRef.current) {
+          console.log("[GraphPanel] Graph data changed, updating UI")
+          setGraph(response.graph)
+          lastGraphTimestampRef.current = response.graph.lastUpdated
+          hasUserInteractedRef.current = false // Reset on new graph load
+        }
       }
     } catch (err) {
       console.error("[GraphPanel] Failed to load graph:", err)
@@ -46,9 +53,55 @@ export function GraphPanel() {
 
   const handleRefresh = async () => {
     try {
+      // Get current active tab
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true })
+      const currentUrl = activeTab?.url
+      const currentDomain = currentUrl ? new URL(currentUrl).hostname : null
+      
       const response = await sendMessage<{ graph: KnowledgeGraph }>({ type: "REFRESH_GRAPH" })
       if (response?.graph) {
         setGraph(response.graph)
+        lastGraphTimestampRef.current = response.graph.lastUpdated
+        
+        // Find node matching current tab
+        if (currentDomain && graphRef.current) {
+          setTimeout(() => {
+            if (!graphRef.current) return
+            
+            const matchingNode = response.graph.nodes.find(node => 
+              node.domain === currentDomain || node.url.includes(currentDomain)
+            )
+            
+            if (matchingNode) {
+              // Focus on the matching node's cluster
+              const clusterNodes = response.graph.nodes.filter(n => n.cluster === matchingNode.cluster)
+              
+              // Calculate cluster center
+              let sumX = 0, sumY = 0, count = 0
+              clusterNodes.forEach(node => {
+                const graphNode = graphRef.current.graphData().nodes.find((n: any) => n.id === node.id)
+                if (graphNode && graphNode.x !== undefined && graphNode.y !== undefined) {
+                  sumX += graphNode.x
+                  sumY += graphNode.y
+                  count++
+                }
+              })
+              
+              if (count > 0) {
+                const centerX = sumX / count
+                const centerY = sumY / count
+                graphRef.current.centerAt(centerX, centerY, 400)
+                graphRef.current.zoom(2, 400)
+                console.log(`[GraphPanel] Focused on cluster ${matchingNode.cluster} for domain ${currentDomain}`)
+              }
+            } else {
+              // No matching node, zoom to fit all
+              graphRef.current.zoomToFit(400, 50)
+            }
+          }, 800)
+        } else {
+          hasUserInteractedRef.current = false // Allow auto-fit if no current tab
+        }
       }
     } catch (err) {
       console.error("[GraphPanel] Failed to refresh graph:", err)
@@ -57,6 +110,7 @@ export function GraphPanel() {
 
   useEffect(() => {
     loadGraph()
+    // Only load once on mount, no polling
   }, [loadGraph])
 
   useEffect(() => {
@@ -81,6 +135,15 @@ export function GraphPanel() {
         nodesSample: graph.nodes.slice(0, 2),
         edgesSample: graph.edges.slice(0, 2)
       })
+      
+      // Auto-fit when new graph data loads
+      if (!hasUserInteractedRef.current && graphRef.current) {
+        setTimeout(() => {
+          if (graphRef.current && !hasUserInteractedRef.current) {
+            graphRef.current.zoomToFit(400, 50)
+          }
+        }, 500)
+      }
     }
   }, [graph])
 
@@ -158,14 +221,8 @@ export function GraphPanel() {
     visibleNodeIds.add(e.target)
   })
 
-  // If no edges pass the threshold, show all nodes anyway
+  // Show all nodes, including isolated ones without edges
   const filteredNodes = searchFilteredNodes.filter(n => {
-    if (filteredEdges.length === 0) {
-      // Show all nodes when there are no edges
-      if (allClustersSelected) return true
-      return selectedClusters.has(n.cluster)
-    }
-    if (!visibleNodeIds.has(n.id)) return false
     if (allClustersSelected) return true
     return selectedClusters.has(n.cluster)
   })
@@ -204,23 +261,6 @@ export function GraphPanel() {
       }))
   }
 
-  // Build a set of connected node IDs when hovering
-  const connectedNodeIds = new Set<string>()
-  const hoveredNode = hoveredNodeRef.current
-  if (hoveredNode) {
-    connectedNodeIds.add(hoveredNode.id)
-    graphData.links.forEach(link => {
-      if (link.source === hoveredNode.id || (typeof link.source === 'object' && (link.source as any).id === hoveredNode.id)) {
-        const targetId = typeof link.target === 'string' ? link.target : (link.target as any).id
-        connectedNodeIds.add(targetId)
-      }
-      if (link.target === hoveredNode.id || (typeof link.target === 'object' && (link.target as any).id === hoveredNode.id)) {
-        const sourceId = typeof link.source === 'string' ? link.source : (link.source as any).id
-        connectedNodeIds.add(sourceId)
-      }
-    })
-  }
-
   const handleNodeClick = (node: any) => {
     if (node.url) {
       chrome.tabs.create({ url: node.url })
@@ -231,6 +271,7 @@ export function GraphPanel() {
     if (graphRef.current) {
       const currentZoom = graphRef.current.zoom()
       graphRef.current.zoom(currentZoom * 1.3, 400)
+      hasUserInteractedRef.current = true
     }
   }
 
@@ -238,13 +279,14 @@ export function GraphPanel() {
     if (graphRef.current) {
       const currentZoom = graphRef.current.zoom()
       graphRef.current.zoom(currentZoom / 1.3, 400)
+      hasUserInteractedRef.current = true
     }
   }
 
   // Draw cluster boundaries for clusters with 2+ nodes
   const drawClusterBoundaries = (ctx: CanvasRenderingContext2D, globalScale: number) => {
-    // Only draw if not hovering or zoomed out too much
-    if (hoveredNode || globalScale < 0.5) return
+    // Only draw if zoomed out too much
+    if (globalScale < 0.5) return
     
     clustersWithMultipleNodes.forEach(clusterId => {
       const clusterNodes = graphData.nodes.filter(n => n.cluster === clusterId)
@@ -503,12 +545,7 @@ export function GraphPanel() {
               const fontSize = 11 / globalScale
               ctx.font = `${fontSize}px 'Breeze Sans', Sans-Serif`
               
-              let size = node.__bckgDimensions ? node.__bckgDimensions[0] : 4
-              
-              // Scale up hovered node
-              if (node.id === hoveredNodeRef.current?.id) {
-                size *= 1.6
-              }
+              const size = node.__bckgDimensions ? node.__bckgDimensions[0] : 4
               
               // Draw node circle
               ctx.beginPath()
@@ -516,14 +553,13 @@ export function GraphPanel() {
               ctx.fillStyle = node.color
               ctx.fill()
               
-              // Draw border - thicker for hovered node
-              ctx.strokeStyle = node.id === hoveredNodeRef.current?.id ? '#FFFFFF' : 'rgba(255, 255, 255, 0.9)'
-              ctx.lineWidth = node.id === hoveredNodeRef.current?.id ? 2 / globalScale : 0.8 / globalScale
+              // Draw border
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'
+              ctx.lineWidth = 0.8 / globalScale
               ctx.stroke()
               
-              // Draw label below node (show at lower zoom threshold or when hovered/connected)
-              const shouldShowLabel = globalScale > 0.6 || (hoveredNodeRef.current && connectedNodeIds.has(node.id))
-              if (shouldShowLabel) {
+              // Draw label below node
+              if (globalScale > 0.6) {
                 ctx.textAlign = 'center'
                 ctx.textBaseline = 'top'
                 ctx.fillStyle = '#080A0B'
@@ -531,23 +567,11 @@ export function GraphPanel() {
               }
             }}
             nodeCanvasObjectMode={() => 'replace'}
-            linkWidth={(link: any) => {
-              // Thicker links when hovering
-              if (hoveredNode) {
-                const sourceId = typeof link.source === 'string' ? link.source : link.source.id
-                const targetId = typeof link.target === 'string' ? link.target : link.target.id
-                if (sourceId === hoveredNode.id || targetId === hoveredNode.id) {
-                  return Math.max(1.5, link.value * 3)
-                }
-              }
-              return Math.max(0.5, link.value * 1.5)
-            }}
-            linkColor={() => "#cbd5e1"}
+            linkWidth={(link: any) => Math.max(0.5, link.value * 1.5)}
+            linkColor={() => '#94a3b8'}
             linkDirectionalParticles={0}
             onNodeClick={handleNodeClick}
-            onNodeHover={(node) => {
-              hoveredNodeRef.current = node
-            }}
+            onNodeHover={null}
             cooldownTicks={100}
             dagMode={null}
             d3VelocityDecay={0.3}
@@ -558,13 +582,18 @@ export function GraphPanel() {
               drawClusterBoundaries(ctx, globalScale)
             }}
             onEngineStop={() => {
-              if (graphRef.current) {
+              // Only auto-fit on initial load, not after user interactions
+              if (graphRef.current && !hasUserInteractedRef.current) {
                 graphRef.current.zoomToFit(400, 50)
               }
+            }}
+            onZoom={() => {
+              hasUserInteractedRef.current = true
             }}
             onNodeDragEnd={(node: any) => {
               node.fx = node.x
               node.fy = node.y
+              hasUserInteractedRef.current = true
             }}
           />
         ) : (
