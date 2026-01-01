@@ -1,8 +1,9 @@
-import { X, Search, ChevronDown, Settings, ArrowLeft, ExternalLink, MoreVertical, ExternalLinkIcon, Copy, Trash2, EyeOff } from "lucide-react"
+import { X, Search, ChevronDown, Settings, ArrowLeft, ExternalLink, MoreVertical, ExternalLinkIcon, Copy, Trash2, EyeOff, Folder, Calendar, Tag, Edit2, Clock } from "lucide-react"
 import { useEffect, useMemo, useState, useRef } from "react"
 import type { PageEvent } from "~/types/page-event"
 import type { Session } from "~/types/session"
 import type { Label } from "~/background/labelsStore"
+import type { Project } from "~/types/project"
 import { CoiPanel } from "./CoiPanel"
 import { GraphPanel } from "./GraphPanel"
 
@@ -42,9 +43,10 @@ interface PopulatedStateProps {
 }
 
 export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
-  const [activeTab, setActiveTab] = useState<"sessions" | "graph">("sessions")
+  const [activeTab, setActiveTab] = useState<"sessions" | "graph" | "projects">("sessions")
   const [sessions, setSessions] = useState<Session[]>([])
   const [labels, setLabels] = useState<Label[]>([])
+  const [projects, setProjects] = useState<Project[]>([])
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -54,6 +56,7 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null)
   const [expandedDays, setExpandedDays] = useState<string[]>(["today"])
   const [expandedSessions, setExpandedSessions] = useState<string[]>([])
+  const [expandedProjects, setExpandedProjects] = useState<string[]>([])
   const [showAddLabelModal, setShowAddLabelModal] = useState(false)
   const [newLabelName, setNewLabelName] = useState("")
   const [newLabelColor, setNewLabelColor] = useState("#3B82F6")
@@ -81,10 +84,25 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
         console.error("Failed to load labels:", err)
       })
 
-    loadSessions()
+    // Load projects
+    const loadProjects = () => {
+      sendMessage<{ projects: Project[] }>({ type: "GET_PROJECTS" })
+        .then((res) => {
+          setProjects(res?.projects ?? [])
+        })
+        .catch((err) => {
+          console.error("Failed to load projects:", err)
+        })
+    }
 
-    // Poll for session updates every 2 seconds to catch real-time changes
-    const pollInterval = setInterval(loadSessions, 2000)
+    loadSessions()
+    loadProjects()
+
+    // Poll for session and project updates every 2 seconds to catch real-time changes
+    const pollInterval = setInterval(() => {
+      loadSessions()
+      loadProjects()
+    }, 2000)
 
     // Cleanup: stop polling on unmount
     return () => {
@@ -306,6 +324,19 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
           }}>
           Knowledge Graph
         </button>
+        <button
+          onClick={() => setActiveTab("projects")}
+          className={`px-4 py-2 text-sm font-medium transition-all rounded-t-lg ${
+            activeTab === "projects" ? "" : "opacity-60"
+          }`}
+          style={{
+            backgroundColor: activeTab === "projects" ? "white" : "transparent",
+            color: activeTab === "projects" ? "#0072de" : "#64748b",
+            borderBottom: activeTab === "projects" ? "2px solid #0072de" : "none",
+            fontFamily: "'Breeze Sans'"
+          }}>
+          Projects
+        </button>
       </div>
 
       {/* Content */}
@@ -313,6 +344,65 @@ export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
         {activeTab === "graph" ? (
           <div className="p-3">
             <GraphPanel />
+          </div>
+        ) : activeTab === "projects" ? (
+          <div className="p-3">
+            <ProjectsPanel 
+              projects={projects} 
+              sessions={sessions}
+              expandedProjects={expandedProjects}
+              onToggleProject={(projectId) => {
+                setExpandedProjects((prev) =>
+                  prev.includes(projectId) ? prev.filter((id) => id !== projectId) : [...prev, projectId]
+                )
+              }}
+              onDetectProjects={async () => {
+                try {
+                  const response = await sendMessage<{ projects: Project[] }>({ 
+                    type: "DETECT_PROJECTS" 
+                  })
+                  if (response?.projects) {
+                    setProjects(response.projects)
+                  }
+                } catch (err) {
+                  console.error("Failed to detect projects:", err)
+                }
+              }}
+              onUpdateProject={async (projectId, updates) => {
+                try {
+                  await sendMessage({
+                    type: "UPDATE_PROJECT",
+                    payload: { projectId, updates }
+                  })
+                  // Reload projects
+                  const response = await sendMessage<{ projects: Project[] }>({ 
+                    type: "GET_PROJECTS" 
+                  })
+                  if (response?.projects) {
+                    setProjects(response.projects)
+                  }
+                } catch (err) {
+                  console.error("Failed to update project:", err)
+                }
+              }}
+              onDeleteProject={async (projectId) => {
+                try {
+                  await sendMessage({
+                    type: "DELETE_PROJECT",
+                    payload: { projectId }
+                  })
+                  // Reload projects
+                  const response = await sendMessage<{ projects: Project[] }>({ 
+                    type: "GET_PROJECTS" 
+                  })
+                  if (response?.projects) {
+                    setProjects(response.projects)
+                  }
+                } catch (err) {
+                  console.error("Failed to delete project:", err)
+                }
+              }}
+            />
           </div>
         ) : (
           <>
@@ -932,6 +1022,509 @@ function SessionItem({ session, isExpanded, onToggle, labels, onUpdateSessionLab
               </div>
             )
           })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Projects Panel Component
+interface ProjectsPanelProps {
+  projects: Project[]
+  sessions: Session[]
+  expandedProjects: string[]
+  onToggleProject: (projectId: string) => void
+  onDetectProjects: () => Promise<void>
+  onUpdateProject: (projectId: string, updates: Partial<Project>) => Promise<void>
+  onDeleteProject: (projectId: string) => Promise<void>
+}
+
+function ProjectsPanel({
+  projects,
+  sessions,
+  expandedProjects,
+  onToggleProject,
+  onDetectProjects,
+  onUpdateProject,
+  onDeleteProject
+}: ProjectsPanelProps) {
+  const [isDetecting, setIsDetecting] = useState(false)
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null)
+  const [editName, setEditName] = useState("")
+  const [showMockProject, setShowMockProject] = useState(false)
+  const DEV_MODE = true // Set to false to hide mock project
+
+  const mockProject: Project = {
+    id: "mock-project-1",
+    name: "React Documentation Study",
+    description: "Deep dive into React hooks and patterns",
+    startDate: Date.now() - 3 * 24 * 60 * 60 * 1000,
+    endDate: Date.now() - 1 * 24 * 60 * 60 * 1000,
+    sessionIds: ["session-1", "session-2", "session-3"],
+    keywords: ["hooks", "state management", "react patterns", "useEffect", "custom hooks"],
+    topDomains: ["react.dev", "github.com", "stackoverflow.com"],
+    status: "active",
+    createdAt: Date.now() - 5 * 24 * 60 * 60 * 1000,
+    autoDetected: true,
+    score: 87
+  }
+
+  const handleDetect = async () => {
+    setIsDetecting(true)
+    try {
+      await onDetectProjects()
+    } finally {
+      setIsDetecting(false)
+    }
+  }
+
+  const handleStartEdit = (project: Project) => {
+    setEditingProjectId(project.id)
+    setEditName(project.name)
+  }
+
+  const handleSaveEdit = async (projectId: string) => {
+    if (editName.trim()) {
+      await onUpdateProject(projectId, { name: editName.trim() })
+    }
+    setEditingProjectId(null)
+    setEditName("")
+  }
+
+  const handleCancelEdit = () => {
+    setEditingProjectId(null)
+    setEditName("")
+  }
+
+  const handleDelete = async (projectId: string) => {
+    if (window.confirm("Delete this project? Sessions will not be deleted.")) {
+      await onDeleteProject(projectId)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Header with Detect Button */}
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-lg font-semibold" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+            Projects
+          </h2>
+          <p className="text-xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
+            {(projects.length + (DEV_MODE && showMockProject ? 1 : 0)) === 0 ? "No projects detected yet" : `${projects.length + (DEV_MODE && showMockProject ? 1 : 0)} project${(projects.length + (DEV_MODE && showMockProject ? 1 : 0)) === 1 ? '' : 's'} found`}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {DEV_MODE && (
+            <button
+              onClick={() => setShowMockProject(!showMockProject)}
+              className="px-2 py-1.5 rounded text-xs font-medium transition-all hover:opacity-75"
+              style={{ 
+                backgroundColor: showMockProject ? '#FFE5E5' : '#E5E5E5',
+                color: showMockProject ? '#B00020' : '#9A9FA6',
+                fontFamily: "'Breeze Sans'"
+              }}
+              title="Toggle mock project for dev testing">
+              Mock
+            </button>
+          )}
+          <button
+            onClick={handleDetect}
+            disabled={isDetecting}
+            className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-90 disabled:opacity-50"
+            style={{ backgroundColor: '#0074FB', color: 'white', fontFamily: "'Breeze Sans'" }}>
+            {isDetecting ? "Detecting..." : "Detect Projects"}
+          </button>
+        </div>
+      </div>
+
+      {/* Projects List */}
+      {projects.length === 0 && (!DEV_MODE || !showMockProject) ? (
+        <div className="flex flex-col items-center justify-center py-12 gap-4">
+          <Folder className="h-12 w-12 opacity-30" style={{ color: '#9A9FA6' }} />
+          <div className="text-center">
+            <p className="text-sm mb-1" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
+              No projects detected yet
+            </p>
+            <p className="text-xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
+              Click "Detect Projects" to find patterns in your browsing
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {(DEV_MODE && showMockProject ? [mockProject, ...projects] : projects)
+            .sort((a, b) => b.startDate - a.startDate)
+            .map((project) => (
+              <ProjectCard
+                key={project.id}
+                project={project}
+                sessions={sessions.filter(s => project.sessionIds.includes(s.id))}
+                isExpanded={expandedProjects.includes(project.id)}
+                onToggle={() => onToggleProject(project.id)}
+                isEditing={editingProjectId === project.id}
+                editName={editName}
+                onEditNameChange={setEditName}
+                onStartEdit={() => handleStartEdit(project)}
+                onSaveEdit={() => handleSaveEdit(project.id)}
+                onCancelEdit={handleCancelEdit}
+                onDelete={() => {
+                  if (project.id === "mock-project-1") {
+                    setShowMockProject(false)
+                  } else {
+                    handleDelete(project.id)
+                  }
+                }}
+              />
+            ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Project Card Component
+interface ProjectCardProps {
+  project: Project
+  sessions: Session[]
+  isExpanded: boolean
+  onToggle: () => void
+  isEditing: boolean
+  editName: string
+  onEditNameChange: (name: string) => void
+  onStartEdit: () => void
+  onSaveEdit: () => void
+  onCancelEdit: () => void
+  onDelete: () => void
+}
+
+function ProjectCard({
+  project,
+  sessions,
+  isExpanded,
+  onToggle,
+  isEditing,
+  editName,
+  onEditNameChange,
+  onStartEdit,
+  onSaveEdit,
+  onCancelEdit,
+  onDelete
+}: ProjectCardProps) {
+  const [editingDescription, setEditingDescription] = useState(false)
+  const [editDescriptionValue, setEditDescriptionValue] = useState(project.description || "")
+
+  const statusColors = {
+    active: { bg: '#E8F5E9', text: '#2E7D32' },
+    stale: { bg: '#FFF3E0', text: '#E65100' },
+    completed: { bg: '#E3F2FD', text: '#1565C0' }
+  }
+
+  const statusColor = statusColors[project.status]
+
+  const duration = Math.ceil((project.endDate - project.startDate) / (1000 * 60 * 60 * 24))
+  const startDateStr = new Date(project.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const endDateStr = new Date(project.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+
+  const handleSaveDescription = async () => {
+    // This would need to be passed in as a prop for full implementation
+    console.log("Save description:", editDescriptionValue)
+    setEditingDescription(false)
+  }
+
+  const handleCancelDescription = () => {
+    setEditDescriptionValue(project.description || "")
+    setEditingDescription(false)
+  }
+
+  return (
+    <div
+      className="flex flex-col rounded-xl p-4 cursor-pointer transition-all hover:shadow-md"
+      style={{ 
+        backgroundColor: '#FAFAFA',
+        border: '1px solid #E5E5E5'
+      }}
+      onClick={onToggle}>
+      
+      {/* Project Header */}
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex-1 min-w-0">
+          {isEditing ? (
+            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+              <Folder className="h-4 w-4 flex-shrink-0" style={{ color: '#0074FB' }} />
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => onEditNameChange(e.target.value)}
+                className="flex-1 min-w-0 px-2 py-1 text-sm font-semibold rounded border"
+                style={{ 
+                  color: 'var(--dark)', 
+                  fontFamily: "'Breeze Sans'",
+                  borderColor: '#0074FB'
+                }}
+                autoFocus
+              />
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 min-w-0">
+              <Folder className="h-4 w-4 flex-shrink-0" style={{ color: '#0074FB' }} />
+              <h3 className="text-sm font-semibold truncate" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+                {project.name}
+              </h3>
+            </div>
+          )}
+        </div>
+        
+        <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+          {isEditing ? (
+            <>
+              <button
+                onClick={onSaveEdit}
+                className="px-2 py-1 rounded text-xs font-medium"
+                style={{ backgroundColor: '#0074FB', color: 'white' }}>
+                Save
+              </button>
+              <button
+                onClick={onCancelEdit}
+                className="px-2 py-1 rounded text-xs font-medium"
+                style={{ backgroundColor: '#E5E5E5', color: '#080A0B' }}>
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Status Badge */}
+              <span
+                className="px-2 py-0.5 rounded text-2xs font-medium whitespace-nowrap"
+                style={{ 
+                  backgroundColor: statusColor.bg, 
+                  color: statusColor.text,
+                  fontSize: '10px',
+                  fontFamily: "'Breeze Sans'"
+                }}>
+                {project.status}
+              </span>
+              
+              {/* Auto-detected Badge */}
+              {project.autoDetected && (
+                <span
+                  className="px-2 py-0.5 rounded text-2xs font-medium whitespace-nowrap"
+                  style={{ 
+                    backgroundColor: '#F3E8FF', 
+                    color: '#6B21A8',
+                    fontSize: '10px',
+                    fontFamily: "'Breeze Sans'"
+                  }}>
+                  auto
+                </span>
+              )}
+              
+              {/* Edit Button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onStartEdit()
+                }}
+                className="hover:bg-gray-200 rounded p-1 transition-colors"
+                title="Edit project">
+                <Edit2 className="h-3.5 w-3.5" style={{ color: '#9A9FA6' }} />
+              </button>
+              
+              {/* Delete Button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDelete()
+                }}
+                className="hover:bg-red-100 rounded p-1 transition-colors"
+                title="Delete project">
+                <Trash2 className="h-3.5 w-3.5" style={{ color: '#9A9FA6' }} />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Project Metadata */}
+      <div className="flex flex-wrap items-center gap-3 text-xs mb-2" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
+        <div className="flex items-center gap-1">
+          <Calendar className="h-3 w-3" />
+          <span>{duration} day{duration === 1 ? '' : 's'} • {startDateStr} - {endDateStr}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <Clock className="h-3 w-3" />
+          <span>{project.sessionIds.length} session{project.sessionIds.length === 1 ? '' : 's'}</span>
+        </div>
+      </div>
+
+      {/* Keywords */}
+      {project.keywords.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {project.keywords.slice(0, 5).map((keyword, idx) => (
+            <span
+              key={idx}
+              className="px-2 py-0.5 rounded text-2xs"
+              style={{ 
+                backgroundColor: '#E8E8E8', 
+                color: '#555',
+                fontSize: '10px',
+                fontFamily: "'Breeze Sans'"
+              }}>
+              {keyword}
+            </span>
+          ))}
+          {project.keywords.length > 5 && (
+            <span
+              className="px-2 py-0.5 rounded text-2xs"
+              style={{ 
+                backgroundColor: '#E8E8E8', 
+                color: '#555',
+                fontSize: '10px',
+                fontFamily: "'Breeze Sans'"
+              }}>
+              +{project.keywords.length - 5}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Top Domains */}
+      {project.topDomains.length > 0 && (
+        <div className="flex items-center gap-2 text-2xs mb-2" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
+          <Tag className="h-3 w-3" />
+          <span>{project.topDomains.slice(0, 3).join(', ')}</span>
+        </div>
+      )}
+
+      {/* Description */}
+      {editingDescription ? (
+        <div className="flex flex-col gap-2 mb-2" onClick={(e) => e.stopPropagation()}>
+          <textarea
+            value={editDescriptionValue}
+            onChange={(e) => setEditDescriptionValue(e.target.value)}
+            className="flex-1 px-2 py-1 text-xs rounded border"
+            style={{ 
+              color: 'var(--dark)', 
+              fontFamily: "'Breeze Sans'",
+              borderColor: '#0074FB',
+              resize: 'vertical',
+              minHeight: '60px'
+            }}
+            autoFocus
+          />
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleSaveDescription}
+              className="px-2 py-1 rounded text-xs font-medium"
+              style={{ backgroundColor: '#0074FB', color: 'white' }}>
+              Save
+            </button>
+            <button
+              onClick={handleCancelDescription}
+              className="px-2 py-1 rounded text-xs font-medium"
+              style={{ backgroundColor: '#E5E5E5', color: '#080A0B' }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : project.description ? (
+        <div 
+          className="flex items-start justify-between gap-2 mb-2 p-2 rounded group hover:bg-gray-100 transition-colors"
+          style={{ backgroundColor: '#FAFAFA' }}
+          onClick={(e) => e.stopPropagation()}>
+          <p className="text-xs flex-1" style={{ color: '#64748b', fontFamily: "'Breeze Sans'" }}>
+            {project.description}
+          </p>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setEditingDescription(true)
+              setEditDescriptionValue(project.description || "")
+            }}
+            className="hover:bg-gray-200 rounded p-1 transition-all flex-shrink-0"
+            title="Edit description">
+            <Edit2 className="h-3 w-3" style={{ color: '#9A9FA6' }} />
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            setEditingDescription(true)
+            setEditDescriptionValue("")
+          }}
+          className="text-xs mb-2 px-2 py-1 rounded text-left transition-colors hover:bg-gray-100"
+          style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
+          + Add description
+        </button>
+      )}
+
+      {/* Confidence Score */}
+      {project.autoDetected && (
+        <div className="flex items-center gap-2 mb-2">
+          <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#E5E5E5' }}>
+            <div
+              className="h-full transition-all"
+              style={{ 
+                width: `${project.score}%`,
+                backgroundColor: project.score >= 70 ? '#2E7D32' : project.score >= 50 ? '#E65100' : '#9A9FA6'
+              }}
+            />
+          </div>
+          <span className="text-2xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
+            {project.score}% confidence
+          </span>
+        </div>
+      )}
+
+      {/* Expand Icon */}
+      <div className="flex items-center justify-center pt-2 border-t" style={{ borderColor: '#E5E5E5' }}>
+        <ChevronDown
+          className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+          style={{ color: '#9A9FA6' }}
+        />
+      </div>
+
+      {/* Sessions List (when expanded) */}
+      {isExpanded && (
+        <div className="flex flex-col gap-2 pt-3 mt-3 border-t" style={{ borderColor: '#E5E5E5' }}>
+          <h4 className="text-xs font-semibold mb-1" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+            Sessions ({sessions.length})
+          </h4>
+          {sessions.length === 0 ? (
+            <p className="text-xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
+              No sessions linked to this project
+            </p>
+          ) : (
+            sessions
+              .sort((a, b) => (b.pages[0]?.timestamp || b.startTime) - (a.pages[0]?.timestamp || a.startTime))
+              .map((session) => {
+                const firstPage = session.pages[0]
+                const timestamp = firstPage?.timestamp || session.startTime
+                const timeStr = new Date(timestamp).toLocaleString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })
+
+                return (
+                  <div
+                    key={session.id}
+                    className="flex items-start justify-between gap-2 p-2 rounded"
+                    style={{ backgroundColor: '#FFFFFF', border: '1px solid #E5E5E5' }}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs truncate mb-1" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+                        {firstPage?.title || firstPage?.url || 'Untitled'}
+                      </p>
+                      <p className="text-2xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
+                        {timeStr} • {session.pages.length} page{session.pages.length === 1 ? '' : 's'}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })
+          )}
         </div>
       )}
     </div>

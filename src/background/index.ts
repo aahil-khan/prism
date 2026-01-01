@@ -10,6 +10,13 @@ import { getSessions, initializeSessions, updateSessionLabel } from "./sessionMa
 import { executeSearch } from "./search-coordinator"
 import { loadLabels, addLabel, deleteLabel, getLabelById } from "./labelsStore"
 import { loadLearnedAssociations, learnFromSession } from "./contextLearning"
+import { 
+  detectProjects, 
+  loadProjects, 
+  addProject, 
+  updateProject, 
+  deleteProject 
+} from "./projectManager"
 import { logSearchResults } from "~/lib/search-explainer"
 import {
   incrementTabSwitch,
@@ -171,6 +178,83 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       })
       .catch((error) => {
         console.error("DELETE_LABEL failed:", error)
+        sendResponse({ success: false })
+      })
+    return true
+  }
+
+  if (message.type === "GET_PROJECTS") {
+    loadProjects()
+      .then((projects) => {
+        sendResponse({ projects })
+      })
+      .catch((error) => {
+        console.error("GET_PROJECTS failed:", error)
+        sendResponse({ projects: [] })
+      })
+    return true
+  }
+
+  if (message.type === "DETECT_PROJECTS") {
+    try {
+      const sessions = getSessions()
+      const projects = detectProjects(sessions)
+      sendResponse({ projects })
+    } catch (error) {
+      console.error("DETECT_PROJECTS failed:", error)
+      sendResponse({ projects: [] })
+    }
+    return true
+  }
+
+  if (message.type === "CREATE_PROJECT") {
+    const { name, description, sessionIds } = message.payload
+    const sessions = getSessions()
+    const projectSessions = sessions.filter(s => sessionIds.includes(s.id))
+    
+    addProject({
+      name,
+      description,
+      startDate: Math.min(...projectSessions.map(s => s.startTime)),
+      endDate: Math.max(...projectSessions.map(s => s.endTime)),
+      sessionIds,
+      keywords: [],
+      topDomains: [],
+      status: 'active',
+      autoDetected: false,
+      score: 100 // Manual projects get perfect score
+    })
+      .then((newProject) => {
+        sendResponse({ project: newProject })
+      })
+      .catch((error) => {
+        console.error("CREATE_PROJECT failed:", error)
+        sendResponse({ error: error.message })
+      })
+    return true
+  }
+
+  if (message.type === "UPDATE_PROJECT") {
+    const { projectId, updates } = message.payload
+    updateProject(projectId, updates)
+      .then(() => {
+        sendResponse({ success: true })
+      })
+      .catch((error) => {
+        console.error("UPDATE_PROJECT failed:", error)
+        sendResponse({ success: false })
+      })
+    return true
+  }
+
+  if (message.type === "DELETE_PROJECT") {
+    const { projectId } = message.payload
+    deleteProject(projectId)
+      .then(() => {
+        sendResponse({ success: true })
+      })
+      .catch((error) => {
+        console.error("DELETE_PROJECT failed:", error)
         sendResponse({ success: false })
       })
     return true

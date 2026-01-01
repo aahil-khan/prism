@@ -7,4 +7,5 @@ export type Session = {
   pages: PageEvent[]
   inferredTitle?: string
   labelId?: string // Optional label ID from user's label list
+  projectId?: string // Optional project ID this session belongs to
 }
