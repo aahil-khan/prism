@@ -76,6 +76,60 @@ export function getFocusModeState(): FocusModeState {
   return { ...currentState }
 }
 
+// Sweep and close blocked tabs when Focus Mode activates
+async function sweepBlockedTabs(): Promise<void> {
+  try {
+    const blocklist = await loadBlocklist()
+    const activeCategories = currentState.enabledCategories
+    
+    // Get all blocked domains (deduplicated)
+    const blockedDomains = new Set<string>()
+    blocklist.entries
+      .filter(entry => activeCategories.includes(entry.category))
+      .forEach(entry => {
+        let normalized = normalizePattern(entry.pattern)
+        if (normalized.includes("/")) {
+          normalized = normalized.split("/")[0]
+        }
+        const domain = normalized.replace(/^www\./, "")
+        blockedDomains.add(domain)
+      })
+
+    console.log("[Focus Mode] Sweeping tabs for blocked domains:", Array.from(blockedDomains))
+
+    // Get all open tabs
+    const tabs = await chrome.tabs.query({})
+    let closedCount = 0
+    
+    for (const tab of tabs) {
+      if (!tab.url || !tab.id) continue
+      
+      try {
+        const tabUrl = new URL(tab.url)
+        const tabDomain = tabUrl.hostname.replace(/^www\./, "")
+        
+        // Check if tab domain matches any blocked domain
+        const isBlocked = Array.from(blockedDomains).some(domain => 
+          tabDomain === domain || tabDomain.endsWith(`.${domain}`)
+        )
+        
+        if (isBlocked) {
+          console.log(`[Focus Mode] Closing blocked tab: ${tab.url}`)
+          await chrome.tabs.remove(tab.id)
+          closedCount++
+        }
+      } catch (err) {
+        // Skip invalid URLs (chrome://, about:, etc.)
+        continue
+      }
+    }
+    
+    console.log(`[Focus Mode] Closed ${closedCount} blocked tabs`)
+  } catch (error) {
+    console.error("[Focus Mode] Error sweeping blocked tabs:", error)
+  }
+}
+
 // Toggle focus mode on/off
 export async function toggleFocusMode(): Promise<FocusModeState> {
   currentState.isActive = !currentState.isActive
@@ -86,6 +140,11 @@ export async function toggleFocusMode(): Promise<FocusModeState> {
 
   // Update blocking rules based on new state
   await updateBlockingRules()
+
+  // If activating focus mode, close all tabs matching blocked sites
+  if (currentState.isActive) {
+    await sweepBlockedTabs()
+  }
 
   // Save state to storage
   await saveFocusModeState(currentState)
