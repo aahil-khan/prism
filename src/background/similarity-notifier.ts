@@ -15,9 +15,13 @@ const EXCLUDED_DOMAINS = new Set([
   'wikipedia.org', 'www.wikipedia.org',
   'gmail.com', 'mail.google.com',
 ])
+const MIN_VISITS = 1
+const MAX_VISITS = 3
 
-const ONE_HOUR_MS = 60 * 60 * 1000
-const MAX_VISIT_COUNT_FOR_NOTIFICATION = 5
+const MIN_PAGE_AGE_MS = 2 * 60 * 1000 // 2 minutes
+const SIMILARITY_THRESHOLD = 0.65
+const MAX_SIMILAR_RESULTS = 3
+
 
 function cosineSimilarity(vecA: number[] | undefined, vecB: number[] | undefined): number {
   if (!vecA || !vecB) return 0
@@ -39,6 +43,14 @@ function isExcludedDomain(url: string): boolean {
 }
 
 export async function checkAndNotifySimilarPages(currentPage: PageEvent, tabId?: number): Promise<void> {
+  const { enableNotifications = true } =
+  await chrome.storage.local.get("enableNotifications")
+
+if (!enableNotifications) {
+  console.log("[Notify] Notifications disabled by user")
+  return
+}
+
   if (!currentPage.titleEmbedding) return
 
   console.log("checkAndNotifySimilarPages invoked for", currentPage.url, "tabId:", tabId)
@@ -54,18 +66,35 @@ export async function checkAndNotifySimilarPages(currentPage: PageEvent, tabId?:
   // 4. Older than 1 hour (don't notify about recent pages)
   // 5. Visited less than 5 times (low visit count = more interesting to revisit)
   const candidatePages = allPages.filter((p) => {
-    if (p.url === currentPage.url) return false
-    if (!p.titleEmbedding) return false
-    if (isExcludedDomain(p.url)) return false
-    
-    const pageAge = now - p.timestamp
-    if (pageAge < ONE_HOUR_MS) return false
-    
-    const visitCount = p.visitCount ?? 1
-    if (visitCount >= MAX_VISIT_COUNT_FOR_NOTIFICATION) return false
-    
-    return true
-  })
+  if (p.url === currentPage.url) return false
+  if (!p.titleEmbedding) return false
+  if (isExcludedDomain(p.url)) return false
+
+  const visitCount = p.visitCount ?? 0
+  if (visitCount < MIN_VISITS || visitCount > MAX_VISITS) {
+    console.log("[Notify] Rejected:", {
+      url: p.url,
+      visitCount,
+      reason: "visit count outside range"
+    })
+    return false
+  }
+
+  const pageAge = now - p.timestamp
+  if (pageAge < MIN_PAGE_AGE_MS) {
+    console.log("[Notify] Rejected:", {
+      url: p.url,
+      pageAge,
+      minRequired: MIN_PAGE_AGE_MS,
+      reason: "page too recent"
+    })
+    return false
+  }
+
+  console.log("[Notify] Candidate accepted:", p.url)
+  return true
+})
+
 
   // Find similar pages among candidates
   const similar = candidatePages
@@ -73,9 +102,10 @@ export async function checkAndNotifySimilarPages(currentPage: PageEvent, tabId?:
       page: p,
       score: cosineSimilarity(currentPage.titleEmbedding, p.titleEmbedding),
     }))
-    .filter((r) => r.score >= 0.4)
+    .filter((r) => r.score >= SIMILARITY_THRESHOLD)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 5)
+    .slice(0, MAX_SIMILAR_RESULTS)
+
 
   if (similar.length === 0) {
     console.log(`No similar pages found for: ${currentPage.title}`)
