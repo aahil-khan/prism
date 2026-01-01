@@ -293,6 +293,14 @@ export function getSessions(): Session[] {
 }
 
 /**
+ * Get current session ID (the most recent session)
+ */
+export function getCurrentSessionId(): string | null {
+  const lastSession = getLastSession()
+  return lastSession?.id || null
+}
+
+/**
  * Update a session's label
  */
 export async function updateSessionLabel(sessionId: string, labelId: string | undefined): Promise<void> {

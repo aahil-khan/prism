@@ -1,8 +1,9 @@
-import { processPageEvent, getSessions } from "./sessionManager"
+import { processPageEvent, getSessions, getCurrentSessionId } from "./sessionManager"
 import { getBehaviorState } from "./ephemeralBehavior"
 import { generateEmbedding } from "./embedding-engine"
 import { checkAndNotifySimilarPages } from "./similarity-notifier"
 import { markGraphForRebuild, broadcastSessionUpdate } from "./index"
+import { checkPageForCandidate, markCandidateNotified } from "./candidateDetector"
 
 // Listen for PAGE_VISITED events from content script
 export const setupPageVisitListener = () => {
@@ -52,6 +53,35 @@ export const setupPageVisitListener = () => {
           // Check for and notify about similar pages (pass sender tab ID)
           const tabId = sender.tab?.id
           await checkAndNotifySimilarPages(baseEvent, tabId)
+
+          // Check if this page should create/update a project candidate
+          const allSessions = getSessions()
+          const currentSessionId = getCurrentSessionId()
+          if (currentSessionId) {
+            const candidate = await checkPageForCandidate(baseEvent, currentSessionId, allSessions)
+            if (candidate) {
+              console.log("[ProjectDetection] Candidate ready to notify:", candidate)
+              
+              // Send notification to content script (will show subtle banner)
+              if (tabId) {
+                chrome.tabs.sendMessage(tabId, {
+                  type: "PROJECT_CANDIDATE_READY",
+                  payload: {
+                    candidateId: candidate.id,
+                    primaryDomain: candidate.primaryDomain,
+                    keywords: candidate.keywords,
+                    visitCount: candidate.visitCount,
+                    score: candidate.score
+                  }
+                }).then(() => {
+                  // Only mark as notified if message sent successfully
+                  markCandidateNotified(candidate.id)
+                }).catch((err) => {
+                  console.log("[CandidateDetector] Could not send notification to tab:", err)
+                })
+              }
+            }
+          }
         } catch (error) {
           console.error("[PageEvent] Failed to process page event:", error)
         }

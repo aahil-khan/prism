@@ -14,15 +14,28 @@ interface SimilarPagesMessage {
 
 function IndexSidePanel() {
   const [showPopulated, setShowPopulated] = useState(false)
+  const [activeTab, setActiveTab] = useState<string>("sessions") // Track active tab
   const [notification, setNotification] = useState<{
     message: string
     pages: Array<{ title: string; url: string }>
   } | null>(null)
 
   useEffect(() => {
+    // Check if there's a preferred tab stored
+    chrome.storage.local.get("sidepanel-active-tab", (result) => {
+      if (result["sidepanel-active-tab"]) {
+        const tab = result["sidepanel-active-tab"]
+        console.log("[Sidepanel] Setting active tab from storage:", tab)
+        setShowPopulated(true)
+        setActiveTab(tab as "sessions" | "graph" | "projects")
+        // Clear the preference after using it
+        chrome.storage.local.remove("sidepanel-active-tab")
+      }
+    })
+
     // Listen for messages from background script
     const messageListener = (
-      message: SimilarPagesMessage,
+      message: SimilarPagesMessage | { type: "SWITCH_TO_TAB"; payload: { tab: string } },
       sender: chrome.runtime.MessageSender,
       sendResponse: (response?: any) => void
     ) => {
@@ -35,6 +48,10 @@ function IndexSidePanel() {
           message: `You've visited ${message.pages.length} similar page(s): ${titles}${titles.length > 100 ? "..." : ""}`,
           pages: message.pages,
         })
+      }
+      if (message.type === "SWITCH_TO_TAB") {
+        setShowPopulated(true) // Ensure populated state is showing
+        setActiveTab(message.payload.tab)
       }
       sendResponse()
     }
@@ -107,7 +124,10 @@ function IndexSidePanel() {
         />
       )}
       {showPopulated ? (
-        <PopulatedState onShowEmpty={() => setShowPopulated(false)} />
+        <PopulatedState 
+          onShowEmpty={() => setShowPopulated(false)} 
+          initialTab={activeTab}
+        />
       ) : (
         <EmptyState onShowPopulated={() => setShowPopulated(true)} />
       )}

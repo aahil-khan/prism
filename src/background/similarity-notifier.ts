@@ -130,8 +130,12 @@ export async function checkAndNotifySimilarPages(currentPage: PageEvent, tabId?:
           () => {
             if (chrome.runtime.lastError) {
               console.warn("Could not send message to content script:", chrome.runtime.lastError.message)
-              // Fallback: inject toast directly via scripting API
+              // Fallback: inject toast directly via scripting API (only if available)
               try {
+                if (!chrome.scripting?.executeScript) {
+                  console.warn("chrome.scripting.executeScript not available")
+                  return
+                }
                 chrome.scripting.executeScript({
                   target: { tabId },
                   func: (payload) => {

@@ -17,6 +17,15 @@ import {
   updateProject, 
   deleteProject 
 } from "./projectManager"
+import { 
+  getReadyCandidates,
+  dismissCandidate,
+  promoteCandidateToProject,
+  createTestCandidate,
+  clearAllCandidates,
+  loadCandidates,
+  saveCandidates
+} from "./candidateDetector"
 import { logSearchResults } from "~/lib/search-explainer"
 import {
   incrementTabSwitch,
@@ -257,6 +266,159 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.error("DELETE_PROJECT failed:", error)
         sendResponse({ success: false })
       })
+    return true
+  }
+
+  // Project candidate operations
+  if (message.type === "GET_READY_CANDIDATES") {
+    getReadyCandidates()
+      .then((candidates) => {
+        sendResponse({ candidates })
+      })
+      .catch((error) => {
+        console.error("GET_READY_CANDIDATES failed:", error)
+        sendResponse({ candidates: [] })
+      })
+    return true
+  }
+
+  if (message.type === "DISMISS_CANDIDATE") {
+    const { candidateId } = message.payload
+    dismissCandidate(candidateId)
+      .then(() => {
+        sendResponse({ success: true })
+      })
+      .catch((error) => {
+        console.error("DISMISS_CANDIDATE failed:", error)
+        sendResponse({ success: false })
+      })
+    return true
+  }
+
+  if (message.type === "SNOOZE_CANDIDATE") {
+    const { candidateId } = message.payload
+    // Snooze = increase snoozeCount and reset status to 'watching'
+    // This requires 2 more visits per snooze to trigger notification again
+    loadCandidates()
+      .then(async (candidates) => {
+        const candidate = candidates.find(c => c.id === candidateId)
+        if (candidate) {
+          candidate.snoozeCount = (candidate.snoozeCount || 0) + 1
+          candidate.status = 'watching'
+          candidate.notificationShown = false
+          console.log(`[Snooze] Candidate snoozed. Will need ${2 * candidate.snoozeCount} more visits`)
+          await saveCandidates(candidates)
+          sendResponse({ success: true })
+        } else {
+          sendResponse({ success: false, error: "Candidate not found" })
+        }
+      })
+      .catch((error) => {
+        console.error("SNOOZE_CANDIDATE failed:", error)
+        sendResponse({ success: false })
+      })
+    return true
+  }
+
+  if (message.type === "PROMOTE_CANDIDATE") {
+    const { candidateId } = message.payload
+    console.log("[PROMOTE_CANDIDATE] Processing candidateId:", candidateId)
+    
+    // Get all candidates (not just ready ones) to find the one to promote
+    loadCandidates()
+      .then(async (candidates) => {
+        console.log("[PROMOTE_CANDIDATE] Found", candidates.length, "total candidates")
+        const candidate = candidates.find(c => c.id === candidateId)
+        console.log("[PROMOTE_CANDIDATE] Target candidate found:", !!candidate)
+        if (!candidate) {
+          console.error("[PROMOTE_CANDIDATE] Candidate not found:", candidateId)
+          sendResponse({ success: false, error: "Candidate not found" })
+          return
+        }
+
+        const sessions = getSessions()
+        const projectSessions = sessions.filter(s => candidate.sessionIds.includes(s.id))
+        
+        // Create project from candidate
+        const newProject = await addProject({
+          name: candidate.keywords.length > 0 
+            ? candidate.keywords.slice(0, 3).join(' ') 
+            : candidate.primaryDomain,
+          description: `Auto-detected project on ${candidate.primaryDomain}`,
+          startDate: candidate.firstSeen,
+          endDate: candidate.lastSeen,
+          sessionIds: candidate.sessionIds,
+          keywords: candidate.keywords,
+          topDomains: [candidate.primaryDomain, ...candidate.relatedDomains.slice(1, 3)],
+          status: 'active',
+          autoDetected: true,
+          score: candidate.score
+        })
+
+        // Remove candidate from storage
+        await promoteCandidateToProject(candidateId)
+
+        sendResponse({ success: true, project: newProject })
+      })
+      .catch((error) => {
+        console.error("PROMOTE_CANDIDATE failed:", error)
+        sendResponse({ success: false, error: error.message })
+      })
+    return true
+  }
+
+  // Dev testing helpers
+  if (message.type === "CREATE_TEST_CANDIDATE") {
+    const { domain, keywords, score } = message.payload
+    createTestCandidate(domain, keywords, score)
+      .then((candidate) => {
+        sendResponse({ success: true, candidate })
+      })
+      .catch((error) => {
+        console.error("CREATE_TEST_CANDIDATE failed:", error)
+        sendResponse({ success: false, error: error.message })
+      })
+    return true
+  }
+
+  if (message.type === "CLEAR_ALL_CANDIDATES") {
+    clearAllCandidates()
+      .then(() => {
+        sendResponse({ success: true })
+      })
+      .catch((error) => {
+        console.error("CLEAR_ALL_CANDIDATES failed:", error)
+        sendResponse({ success: false })
+      })
+    return true
+  }
+
+  if (message.type === "OPEN_SIDEPANEL_TO_PROJECTS") {
+    // Open sidepanel and notify it to switch to projects tab
+    console.log("[Background] Opening sidepanel to projects tab")
+    
+    // Store the preferred tab in chrome storage so sidepanel can read it
+    chrome.storage.local.set({ "sidepanel-active-tab": "projects" }, () => {
+      console.log("[Background] Set sidepanel tab preference to 'projects'")
+    })
+    
+    // Get the active tab and open sidepanel for it
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]?.id) {
+        chrome.sidePanel.open({ tabId: tabs[0].id }, () => {
+          if (chrome.runtime.lastError) {
+            console.error("[Background] Failed to open sidepanel:", chrome.runtime.lastError)
+            sendResponse({ success: false, error: chrome.runtime.lastError.message })
+          } else {
+            console.log("[Background] Sidepanel opened successfully")
+            sendResponse({ success: true })
+          }
+        })
+      } else {
+        console.error("[Background] No active tab found")
+        sendResponse({ success: false, error: "No active tab" })
+      }
+    })
     return true
   }
 

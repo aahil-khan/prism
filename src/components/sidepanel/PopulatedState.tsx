@@ -40,14 +40,24 @@ async function sendMessage<T>(message: any): Promise<T> {
 
 interface PopulatedStateProps {
   onShowEmpty?: () => void
+  initialTab?: string
 }
 
-export function PopulatedState({ onShowEmpty }: PopulatedStateProps) {
-  const [activeTab, setActiveTab] = useState<"sessions" | "graph" | "projects">("sessions")
+export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps) {
+  const [activeTab, setActiveTab] = useState<"sessions" | "graph" | "projects">(
+    (initialTab as "sessions" | "graph" | "projects") || "sessions"
+  )
   const [sessions, setSessions] = useState<Session[]>([])
   const [labels, setLabels] = useState<Label[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [results, setResults] = useState<SearchResult[]>([])
+
+  // Update activeTab when initialTab changes
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab as "sessions" | "graph" | "projects")
+    }
+  }, [initialTab])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
@@ -1052,7 +1062,7 @@ function ProjectsPanel({
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
   const [showMockProject, setShowMockProject] = useState(false)
-  const DEV_MODE = true // Set to false to hide mock project
+  const DEV_MODE = true // Set to false to hide mock project and dev buttons
 
   const mockProject: Project = {
     id: "mock-project-1",
@@ -1116,17 +1126,59 @@ function ProjectsPanel({
         </div>
         <div className="flex items-center gap-2">
           {DEV_MODE && (
-            <button
-              onClick={() => setShowMockProject(!showMockProject)}
-              className="px-2 py-1.5 rounded text-xs font-medium transition-all hover:opacity-75"
-              style={{ 
-                backgroundColor: showMockProject ? '#FFE5E5' : '#E5E5E5',
-                color: showMockProject ? '#B00020' : '#9A9FA6',
-                fontFamily: "'Breeze Sans'"
-              }}
-              title="Toggle mock project for dev testing">
-              Mock
-            </button>
+            <>
+              <button
+                onClick={() => setShowMockProject(!showMockProject)}
+                className="px-2 py-1.5 rounded text-xs font-medium transition-all hover:opacity-75"
+                style={{ 
+                  backgroundColor: showMockProject ? '#FFE5E5' : '#E5E5E5',
+                  color: showMockProject ? '#B00020' : '#9A9FA6',
+                  fontFamily: "'Breeze Sans'"
+                }}
+                title="Toggle mock project for dev testing">
+                Mock
+              </button>
+              <button
+                onClick={async () => {
+                  // Create a test candidate with one less visit than needed
+                  // User will manually visit the page to trigger notification
+                  await sendMessage({
+                    type: "CREATE_TEST_CANDIDATE",
+                    payload: {
+                      domain: "github.com",
+                      keywords: ["prism", "aahil-khan", "typescript"]
+                      // visitCount defaults to MIN_VISITS - 1
+                    }
+                  })
+                  console.log("Test candidate created. Visit https://github.com/aahil-khan/prism to trigger notification.")
+                }}
+                className="px-2 py-1.5 rounded text-xs font-medium transition-all hover:opacity-75"
+                style={{ 
+                  backgroundColor: '#FFF3E0',
+                  color: '#E65100',
+                  fontFamily: "'Breeze Sans'"
+                }}
+                title="Create test candidate (visit page to trigger)">
+                Create Test
+              </button>
+              <button
+                onClick={async () => {
+                  // Clear all candidates
+                  await sendMessage({
+                    type: "CLEAR_ALL_CANDIDATES"
+                  })
+                  console.log("Cleared all candidates")
+                }}
+                className="px-2 py-1.5 rounded text-xs font-medium transition-all hover:opacity-75"
+                style={{ 
+                  backgroundColor: '#FFEBEE',
+                  color: '#C62828',
+                  fontFamily: "'Breeze Sans'"
+                }}
+                title="Clear all test candidates">
+                Clear
+              </button>
+            </>
           )}
           <button
             onClick={handleDetect}
