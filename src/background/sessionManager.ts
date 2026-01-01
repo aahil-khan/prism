@@ -36,6 +36,11 @@ export async function initializeSessions(): Promise<void> {
   if (isInitialized) return
   try {
     sessions = await loadSessions()
+    
+    // Re-sessionize all existing sessions with new hybrid logic
+    // This ensures old sessions stored with 30-min gap only are now split intelligently
+    sessions = reSessionizeAll(sessions)
+    
     // Backfill missing inferred titles for existing sessions
     sessions = backfillInferredTitles(sessions)
     // Merge single-page sessions after loading
@@ -176,6 +181,63 @@ export async function processPageEvent(pageEvent: PageEvent): Promise<void> {
     console.error("Failed to persist sessions:", error)
     // Sessions remain in memory even if persistence fails
   }
+}
+
+/**
+ * Re-sessionize all existing sessions using the new hybrid logic
+ * Flattens all pages from old sessions and re-chunks them based on:
+ * 1. Time gaps (30 minutes)
+ * 2. Maximum duration (2 hours)
+ * 3. Context switching (5+ min gap + activity type change)
+ */
+function reSessionizeAll(oldSessions: Session[]): Session[] {
+  if (oldSessions.length === 0) return []
+
+  // Flatten all pages and sort by timestamp
+  const allPages = oldSessions
+    .flatMap((s) => s.pages)
+    .sort((a, b) => a.timestamp - b.timestamp)
+
+  const newSessions: Session[] = []
+  let currentSession: Session | null = null
+
+  allPages.forEach((page) => {
+    if (!currentSession) {
+      // Start first session
+      currentSession = {
+        id: generateSessionId(),
+        startTime: page.timestamp,
+        endTime: page.timestamp,
+        pages: [page],
+        inferredTitle: "",
+      }
+    } else if (shouldStartNewSession(currentSession, page)) {
+      // Save current session and start a new one
+      newSessions.push(currentSession)
+      currentSession = {
+        id: generateSessionId(),
+        startTime: page.timestamp,
+        endTime: page.timestamp,
+        pages: [page],
+        inferredTitle: "",
+      }
+    } else {
+      // Add to current session
+      currentSession.pages.push(page)
+      currentSession.endTime = page.timestamp
+    }
+  })
+
+  // Push the last session
+  if (currentSession) {
+    newSessions.push(currentSession)
+  }
+
+  console.log(
+    `[Sessionization] Re-sessionized ${oldSessions.length} old sessions into ${newSessions.length} new sessions`
+  )
+
+  return newSessions
 }
 
 /**
