@@ -22,10 +22,22 @@ export interface ProjectCandidate {
   
   // Confidence scoring (0-100)
   score: number
+  scoreBreakdown?: {
+    visits: number // 0-40 pts
+    sessions: number // 0-30 pts
+    resources: number // 0-20 pts
+    timeSpan: number // 0-10 pts
+    total: number
+  }
   
   // State
   status: 'watching' | 'ready' | 'dismissed' // ready = ready to notify
-  notificationShown: boolean
+  notificationShown: boolean // Legacy - will be replaced by notificationHistory
+  notificationHistory?: {
+    sessionId: string
+    timestamp: number
+    action: 'shown' | 'accepted' | 'snoozed' | 'dismissed'
+  }[]
   snoozeCount?: number // Number of times user clicked "Not Now" - requires 2-3 more visits per snooze
 }
 

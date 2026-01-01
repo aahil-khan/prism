@@ -4,6 +4,7 @@ import { generateEmbedding } from "./embedding-engine"
 import { checkAndNotifySimilarPages } from "./similarity-notifier"
 import { markGraphForRebuild, broadcastSessionUpdate } from "./index"
 import { checkPageForCandidate, markCandidateNotified } from "./candidateDetector"
+import { checkForProjectSuggestion } from "./projectSuggestions"
 
 // Listen for PAGE_VISITED events from content script
 export const setupPageVisitListener = () => {
@@ -71,15 +72,35 @@ export const setupPageVisitListener = () => {
                     primaryDomain: candidate.primaryDomain,
                     keywords: candidate.keywords,
                     visitCount: candidate.visitCount,
-                    score: candidate.score
+                    score: candidate.score,
+                    scoreBreakdown: candidate.scoreBreakdown,
+                    sessionId: currentSessionId
                   }
                 }).then(() => {
-                  // Only mark as notified if message sent successfully
-                  markCandidateNotified(candidate.id)
+                  // Record notification in history
+                  markCandidateNotified(candidate.id, currentSessionId)
                 }).catch((err) => {
                   console.log("[CandidateDetector] Could not send notification to tab:", err)
                 })
               }
+            }
+            
+            // Also check for project suggestions (add to existing project)
+            const suggestion = await checkForProjectSuggestion(baseEvent, baseEvent.url)
+            if (suggestion && tabId) {
+              console.log("[ProjectSuggestion] Found match:", suggestion.project.name, "score:", suggestion.score)
+              chrome.tabs.sendMessage(tabId, {
+                type: "PROJECT_SUGGESTION_READY",
+                payload: {
+                  projectId: suggestion.project.id,
+                  projectName: suggestion.project.name,
+                  currentUrl: baseEvent.url,
+                  currentTitle: baseEvent.title,
+                  score: suggestion.score
+                }
+              }).catch((err) => {
+                console.log("[ProjectSuggestion] Could not send notification:", err)
+              })
             }
           }
         } catch (error) {

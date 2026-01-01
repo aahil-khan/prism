@@ -17,8 +17,14 @@ function handleMessage(message: any, sender: any, sendResponse: any) {
   console.log("[ProjectNotification] Message received:", message)
   if (message.type === "PROJECT_CANDIDATE_READY") {
     console.log("[ProjectNotification] Project candidate ready! Showing notification...")
-    const { candidateId, primaryDomain, keywords, visitCount, score } = message.payload
-    showProjectNotification(candidateId, primaryDomain, keywords, visitCount, score)
+    const { candidateId, primaryDomain, keywords, visitCount, score, scoreBreakdown } = message.payload
+    showProjectNotification(candidateId, primaryDomain, keywords, visitCount, score, scoreBreakdown)
+    sendResponse({ received: true })
+  }
+  if (message.type === "PROJECT_SUGGESTION_READY") {
+    console.log("[ProjectNotification] Project suggestion ready! Showing notification...")
+    const { projectId, projectName, currentUrl, currentTitle, score } = message.payload
+    showProjectSuggestion(projectId, projectName, currentUrl, currentTitle, score)
     sendResponse({ received: true })
   }
   return true
@@ -32,7 +38,8 @@ function showProjectNotification(
   primaryDomain: string,
   keywords: string[],
   visitCount: number,
-  score: number
+  score: number,
+  scoreBreakdown?: { visits: number; sessions: number; resources: number; timeSpan: number; total: number }
 ) {
   // Check if banner already exists
   if (document.getElementById("aegis-project-notification")) {
@@ -136,6 +143,34 @@ function showProjectNotification(
         font-weight: 600;
         margin-left: auto;
       }
+      .aegis-score-breakdown {
+        margin: 12px 0;
+        padding: 8px 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.2);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+      }
+      .aegis-score-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 4px 0;
+        font-size: 11px;
+        opacity: 0.9;
+      }
+      .aegis-score-bar {
+        flex: 1;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 2px;
+        margin: 0 8px;
+        overflow: hidden;
+      }
+      .aegis-score-bar-fill {
+        height: 100%;
+        background: white;
+        border-radius: 2px;
+        transition: width 0.3s ease;
+      }
     </style>
     <div class="aegis-notification-title">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -149,6 +184,38 @@ function showProjectNotification(
       It looks like you're working on a project related to <strong>${keywordsText}</strong>. 
       Would you like to track it?
     </div>
+    ${scoreBreakdown ? `
+      <div class="aegis-score-breakdown">
+        <div class="aegis-score-item">
+          <span>Visits (${visitCount})</span>
+          <div class="aegis-score-bar">
+            <div class="aegis-score-bar-fill" style="width: ${(scoreBreakdown.visits / 40) * 100}%"></div>
+          </div>
+          <span>${scoreBreakdown.visits}/40</span>
+        </div>
+        <div class="aegis-score-item">
+          <span>Sessions</span>
+          <div class="aegis-score-bar">
+            <div class="aegis-score-bar-fill" style="width: ${(scoreBreakdown.sessions / 30) * 100}%"></div>
+          </div>
+          <span>${scoreBreakdown.sessions}/30</span>
+        </div>
+        <div class="aegis-score-item">
+          <span>Resources</span>
+          <div class="aegis-score-bar">
+            <div class="aegis-score-bar-fill" style="width: ${(scoreBreakdown.resources / 20) * 100}%"></div>
+          </div>
+          <span>${scoreBreakdown.resources}/20</span>
+        </div>
+        <div class="aegis-score-item">
+          <span>Time span</span>
+          <div class="aegis-score-bar">
+            <div class="aegis-score-bar-fill" style="width: ${(scoreBreakdown.timeSpan / 10) * 100}%"></div>
+          </div>
+          <span>${scoreBreakdown.timeSpan}/10</span>
+        </div>
+      </div>
+    ` : ''}
     <div class="aegis-notification-actions">
       <button class="aegis-notification-btn aegis-notification-btn-primary" id="aegis-accept-project">
         Track Project
@@ -236,4 +303,157 @@ function showSuccessMessage(message: string) {
     successBanner.style.animation = "slideOutRight 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
     setTimeout(() => successBanner.remove(), 300)
   }, 3000)
+}
+
+function showProjectSuggestion(
+  projectId: string,
+  projectName: string,
+  currentUrl: string,
+  currentTitle: string,
+  score: number
+) {
+  // Check if banner already exists
+  if (document.getElementById("aegis-project-suggestion")) {
+    return
+  }
+
+  // Create suggestion banner (green gradient to differentiate from detection)
+  const banner = document.createElement("div")
+  banner.id = "aegis-project-suggestion"
+  banner.style.cssText = `
+    position: fixed;
+    top: 80px;
+    right: 16px;
+    z-index: 2147483647;
+    background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+    color: white;
+    padding: 16px 20px;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.1);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    max-width: 380px;
+    animation: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    backdrop-filter: blur(10px);
+  `
+
+  banner.innerHTML = `
+    <style>
+      .aegis-suggestion-title {
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .aegis-suggestion-body {
+        font-size: 13px;
+        opacity: 0.95;
+        margin-bottom: 12px;
+        line-height: 1.4;
+      }
+      .aegis-suggestion-actions {
+        display: flex;
+        gap: 8px;
+      }
+      .aegis-suggestion-btn {
+        padding: 8px 16px;
+        border-radius: 8px;
+        border: none;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-family: inherit;
+      }
+      .aegis-suggestion-btn-primary {
+        background: white;
+        color: #10b981;
+      }
+      .aegis-suggestion-btn-primary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(255, 255, 255, 0.3);
+      }
+      .aegis-suggestion-btn-secondary {
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+      }
+      .aegis-suggestion-btn-secondary:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+      .aegis-suggestion-confidence {
+        font-size: 11px;
+        opacity: 0.8;
+        margin-top: 4px;
+      }
+    </style>
+    <div class="aegis-suggestion-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+      </svg>
+      <span>Related to ${projectName}</span>
+    </div>
+    <div class="aegis-suggestion-body">
+      This page seems related to your <strong>${projectName}</strong> project. Add it?
+      <div class="aegis-suggestion-confidence">${Math.round(score * 100)}% match confidence</div>
+    </div>
+    <div class="aegis-suggestion-actions">
+      <button class="aegis-suggestion-btn aegis-suggestion-btn-primary" id="aegis-add-to-project">
+        Add to Project
+      </button>
+      <button class="aegis-suggestion-btn aegis-suggestion-btn-secondary" id="aegis-dismiss-suggestion">
+        Not Now
+      </button>
+    </div>
+  `
+
+  document.body.appendChild(banner)
+
+  // Handle add to project
+  document.getElementById("aegis-add-to-project")?.addEventListener("click", () => {
+    console.log("[ProjectSuggestion] Adding site to project:", projectId, currentUrl)
+    chrome.runtime.sendMessage({
+      type: "ADD_SITE_TO_PROJECT",
+      payload: {
+        projectId,
+        siteUrl: currentUrl,
+        siteTitle: currentTitle,
+        addedBy: 'auto'
+      }
+    }, (response) => {
+      console.log("[ProjectSuggestion] ADD_SITE_TO_PROJECT response:", response)
+      if (response?.success) {
+        showSuccessMessage(`Added to ${projectName}!`)
+      } else {
+        console.error("[ProjectSuggestion] Failed to add site:", response?.error)
+        if (response?.alreadyAdded) {
+          showSuccessMessage("Site already in this project")
+        }
+      }
+    })
+    removeBanner(banner)
+  })
+
+  // Handle dismiss
+  document.getElementById("aegis-dismiss-suggestion")?.addEventListener("click", () => {
+    console.log("[ProjectSuggestion] Dismissed suggestion")
+    
+    // Record dismissal so it doesn't show again for 24 hours
+    chrome.runtime.sendMessage({
+      type: "DISMISS_PROJECT_SUGGESTION",
+      payload: {
+        projectId,
+        url: currentUrl
+      }
+    })
+    
+    removeBanner(banner)
+  })
+
+  // Auto-dismiss after 10 seconds
+  setTimeout(() => {
+    if (document.getElementById("aegis-project-suggestion")) {
+      removeBanner(banner)
+    }
+  }, 10000)
 }

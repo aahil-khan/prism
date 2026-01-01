@@ -1279,8 +1279,24 @@ function ProjectCard({
   const endDateStr = new Date(project.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
   const handleSaveDescription = async () => {
-    // This would need to be passed in as a prop for full implementation
     console.log("Save description:", editDescriptionValue)
+    
+    // Update project with new description
+    const updatedProject = {
+      ...project,
+      description: editDescriptionValue
+    }
+    
+    // Get all projects and replace the current one
+    const projects = await chrome.storage.local.get("aegis-projects")
+    const allProjects = projects["aegis-projects"] || []
+    const updatedProjects = allProjects.map((p: any) => 
+      p.id === project.id ? updatedProject : p
+    )
+    
+    // Save back to storage
+    await chrome.storage.local.set({ "aegis-projects": updatedProjects })
+    
     setEditingDescription(false)
   }
 
@@ -1381,6 +1397,39 @@ function ProjectCard({
                 title="Edit project">
                 <Edit2 className="h-3.5 w-3.5" style={{ color: '#9A9FA6' }} />
               </button>
+              
+              {/* Open All Sites as Tab Group */}
+              {project.sites && project.sites.length > 0 && (
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation()
+                    
+                    // Open all sites in new tabs
+                    const tabIds: number[] = []
+                    for (const site of project.sites) {
+                      const url = site.url.startsWith('http') ? site.url : `https://${site.url}`
+                      const tab = await chrome.tabs.create({ url })
+                      if (tab.id) tabIds.push(tab.id)
+                    }
+                    
+                    // Create a tab group with the project name
+                    if (tabIds.length > 0) {
+                      const groupId = await chrome.tabs.group({ tabIds })
+                      chrome.tabGroups.update(groupId, {
+                        title: project.name,
+                        collapsed: false
+                      }).catch((error) => {
+                        console.error('Failed to update tab group:', error)
+                      })
+                    }
+                  }}
+                  className="hover:bg-gray-200 rounded p-1 transition-colors"
+                  title="Open all sites in a tab group">
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: '#9A9FA6' }}>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </button>
+              )}
               
               {/* Delete Button */}
               <button
@@ -1529,56 +1578,93 @@ function ProjectCard({
         </div>
       )}
 
+      {/* Sites List (shown when expanded) */}
+      {isExpanded && project.sites && project.sites.length > 0 && (
+        <div className="flex flex-col gap-1.5 mb-3 pb-3 border-b" style={{ borderColor: '#E5E5E5' }}>
+          <h4 className="text-xs font-semibold mb-1 flex items-center gap-1.5" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+            Sites ({project.sites.length})
+          </h4>
+          {project.sites
+            .sort((a, b) => b.addedAt - a.addedAt)
+            .slice(0, isExpanded ? project.sites.length : 3)
+            .map((site, index) => {
+              const domain = new URL(site.url.startsWith('http') ? site.url : `https://${site.url}`).hostname
+              const timeAgo = (() => {
+                const now = Date.now()
+                const diff = now - site.addedAt
+                const minutes = Math.floor(diff / 60000)
+                const hours = Math.floor(diff / 3600000)
+                const days = Math.floor(diff / 86400000)
+                
+                if (days > 0) return `${days}d ago`
+                if (hours > 0) return `${hours}h ago`
+                if (minutes > 0) return `${minutes}m ago`
+                return 'just now'
+              })()
+
+              return (
+                <div
+                  key={`${site.url}-${index}`}
+                  className="flex items-start gap-2 p-2 rounded hover:bg-gray-50 transition-colors cursor-pointer"
+                  style={{ backgroundColor: '#FAFAFA', border: '1px solid #E5E5E5' }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    const fullUrl = site.url.startsWith('http') ? site.url : `https://${site.url}`
+                    chrome.tabs.create({ url: fullUrl })
+                  }}
+                  title={`Open ${site.url}`}>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs truncate mb-0.5" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'", fontWeight: 500 }}>
+                      {site.title}
+                    </p>
+                    <p className="text-2xs truncate flex items-center gap-1.5" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
+                      <span>{domain}</span>
+                      <span>•</span>
+                      <span>{timeAgo}</span>
+                      {site.addedBy === 'auto' && (
+                        <>
+                          <span>•</span>
+                          <span style={{ color: '#667eea' }}>auto</span>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                  <svg className="h-3 w-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: '#9A9FA6' }}>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </div>
+              )
+            })}
+          {!isExpanded && project.sites.length > 3 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setIsExpanded(true)
+              }}
+              className="text-2xs py-1 px-2 rounded text-left transition-colors hover:bg-gray-100"
+              style={{ color: '#667eea', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
+              + {project.sites.length - 3} more site{project.sites.length - 3 === 1 ? '' : 's'}
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Expand Icon */}
-      <div className="flex items-center justify-center pt-2 border-t" style={{ borderColor: '#E5E5E5' }}>
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggle()
+        }}
+        className="flex items-center justify-center w-full pt-2 border-t hover:bg-gray-50 transition-colors"
+        style={{ borderColor: '#E5E5E5' }}>
         <ChevronDown
           className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
           style={{ color: '#9A9FA6' }}
         />
-      </div>
-
-      {/* Sessions List (when expanded) */}
-      {isExpanded && (
-        <div className="flex flex-col gap-2 pt-3 mt-3 border-t" style={{ borderColor: '#E5E5E5' }}>
-          <h4 className="text-xs font-semibold mb-1" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
-            Sessions ({sessions.length})
-          </h4>
-          {sessions.length === 0 ? (
-            <p className="text-xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
-              No sessions linked to this project
-            </p>
-          ) : (
-            sessions
-              .sort((a, b) => (b.pages[0]?.timestamp || b.startTime) - (a.pages[0]?.timestamp || a.startTime))
-              .map((session) => {
-                const firstPage = session.pages[0]
-                const timestamp = firstPage?.timestamp || session.startTime
-                const timeStr = new Date(timestamp).toLocaleString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })
-
-                return (
-                  <div
-                    key={session.id}
-                    className="flex items-start justify-between gap-2 p-2 rounded"
-                    style={{ backgroundColor: '#FFFFFF', border: '1px solid #E5E5E5' }}>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs truncate mb-1" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
-                        {firstPage?.title || firstPage?.url || 'Untitled'}
-                      </p>
-                      <p className="text-2xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
-                        {timeStr} • {session.pages.length} page{session.pages.length === 1 ? '' : 's'}
-                      </p>
-                    </div>
-                  </div>
-                )
-              })
-          )}
-        </div>
-      )}
+      </button>
     </div>
   )
 }

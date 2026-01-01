@@ -229,6 +229,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sessionIds,
       keywords: [],
       topDomains: [],
+      sites: [], // Manual projects start with no sites
       status: 'active',
       autoDetected: false,
       score: 100 // Manual projects get perfect score
@@ -265,6 +266,87 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch((error) => {
         console.error("DELETE_PROJECT failed:", error)
         sendResponse({ success: false })
+      })
+    return true
+  }
+
+  if (message.type === "ADD_SITE_TO_PROJECT") {
+    const { projectId, siteUrl, siteTitle, addedBy = 'user' } = message.payload
+    console.log("[ADD_SITE_TO_PROJECT]", { projectId, siteUrl, siteTitle })
+    
+    loadProjects()
+      .then(async (projects) => {
+        const project = projects.find(p => p.id === projectId)
+        if (!project) {
+          sendResponse({ success: false, error: "Project not found" })
+          return
+        }
+        
+        // Check if site already exists IN THIS PROJECT
+        // Note: Sites CAN belong to multiple projects, so we only check this project
+        if (project.sites.some(s => s.url === siteUrl)) {
+          sendResponse({ success: false, error: "Site already in this project", alreadyAdded: true })
+          return
+        }
+        
+        // Add new site
+        const newSite = {
+          url: siteUrl,
+          title: siteTitle,
+          addedAt: Date.now(),
+          addedBy: addedBy as 'auto' | 'user',
+          visitCount: 0 // Will be calculated from sessions
+        }
+        project.sites.push(newSite)
+        
+        // Save updated projects
+        const otherProjects = projects.filter(p => p.id !== projectId)
+        await chrome.storage.local.set({ "aegis-projects": [...otherProjects, project] })
+        
+        console.log("[ADD_SITE_TO_PROJECT] Site added successfully to project:", project.name)
+        console.log(`  → Site can now belong to multiple projects`)
+        sendResponse({ success: true, project })
+      })
+      .catch((error) => {
+        console.error("ADD_SITE_TO_PROJECT failed:", error)
+        sendResponse({ success: false, error: error.message })
+      })
+    return true
+  }
+
+  if (message.type === "DISMISS_PROJECT_SUGGESTION") {
+    const { projectId, url } = message.payload
+    console.log("[DISMISS_PROJECT_SUGGESTION]", { projectId, url })
+    
+    loadProjects()
+      .then(async (projects) => {
+        const project = projects.find(p => p.id === projectId)
+        if (!project) {
+          sendResponse({ success: false, error: "Project not found" })
+          return
+        }
+        
+        // Initialize dismissedSuggestions if not present
+        if (!project.dismissedSuggestions) {
+          project.dismissedSuggestions = []
+        }
+        
+        // Add dismissal record
+        project.dismissedSuggestions.push({
+          url,
+          timestamp: Date.now()
+        })
+        
+        // Save updated projects
+        const otherProjects = projects.filter(p => p.id !== projectId)
+        await chrome.storage.local.set({ "aegis-projects": [...otherProjects, project] })
+        
+        console.log("[DISMISS_PROJECT_SUGGESTION] Dismissal recorded, will not suggest again for 24 hours")
+        sendResponse({ success: true })
+      })
+      .catch((error) => {
+        console.error("DISMISS_PROJECT_SUGGESTION failed:", error)
+        sendResponse({ success: false, error: error.message })
       })
     return true
   }
@@ -339,6 +421,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const sessions = getSessions()
         const projectSessions = sessions.filter(s => candidate.sessionIds.includes(s.id))
         
+        // Create initial site from the most visited specific resource
+        const primarySite = candidate.specificResources[0] // The resource that triggered detection
+        const initialSites = [{
+          url: primarySite,
+          title: candidate.keywords.length > 0 
+            ? candidate.keywords.slice(0, 3).join(' ')
+            : candidate.primaryDomain,
+          addedAt: Date.now(),
+          addedBy: 'auto' as const,
+          visitCount: candidate.visitCount
+        }]
+        
         // Create project from candidate
         const newProject = await addProject({
           name: candidate.keywords.length > 0 
@@ -350,6 +444,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           sessionIds: candidate.sessionIds,
           keywords: candidate.keywords,
           topDomains: [candidate.primaryDomain, ...candidate.relatedDomains.slice(1, 3)],
+          sites: initialSites,
           status: 'active',
           autoDetected: true,
           score: candidate.score
@@ -511,4 +606,28 @@ function rebuildGraphIfNeeded() {
 // Mark graph for rebuild when new page visits occur
 export function markGraphForRebuild() {
   graphNeedsRebuild = true
+}
+
+// DEV ONLY: Export test helpers to window for console access
+if (typeof globalThis !== 'undefined') {
+  import("./testHelpers").then((module) => {
+    (globalThis as any).testHelpers = {
+      testNewProjectDetection: module.testNewProjectDetection,
+      testMultiProjectPerDomain: module.testMultiProjectPerDomain,
+      testSmartSuggestions: module.testSmartSuggestions,
+      testIdempotentNotifications: module.testIdempotentNotifications,
+      testSnooze: module.testSnooze,
+      testFullWorkflow: module.testFullWorkflow,
+      runAllTests: module.runAllTests,
+      interactiveTest: module.interactiveTest,
+      // Also expose direct utilities
+      createTestCandidate,
+      clearAllCandidates,
+      loadCandidates,
+      loadProjects
+    }
+    console.log("%c🧪 Test helpers loaded!", "background: #4CAF50; color: white; padding: 4px 8px; font-weight: bold")
+    console.log("%cQuick start: testHelpers.runAllTests()", "color: #2196F3; font-weight: bold")
+    console.log("%cInteractive: testHelpers.interactiveTest()", "color: #FF9800; font-weight: bold")
+  })
 }
