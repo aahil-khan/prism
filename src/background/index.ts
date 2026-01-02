@@ -36,6 +36,25 @@ import {
 import { computePageCoi, computeSessionCoi, loadCoiWeights } from "~/lib/coi"
 import { buildKnowledgeGraph, type KnowledgeGraph } from "~/lib/knowledge-graph"
 import type { PageEvent } from "~/types/page-event"
+import {
+  initializeFocusMode,
+  toggleFocusMode,
+  toggleCategory,
+  setEnabledCategories,
+  getFocusModeState,
+  refreshBlockingRules
+} from "./focusModeManager"
+import {
+  loadBlocklist,
+  saveBlocklist,
+  addBlocklistEntry,
+  updateBlocklistEntry,
+  deleteBlocklistEntry,
+  updateCategoryStates,
+  importBlocklist,
+  exportBlocklist
+} from "./blocklistStore"
+import type { BlocklistEntry, BlocklistCategory } from "~/types/focus-mode"
 
 // Track registered session listeners (sidepanel tabs)
 const sessionListeners = new Set<number>()
@@ -53,6 +72,11 @@ initializeSessions().then(() => {
 // Initialize learned context associations
 loadLearnedAssociations().then(() => {
   console.log("[Background] Context learning initialized")
+})
+
+// Initialize focus mode on startup
+initializeFocusMode().then(() => {
+  console.log("[Background] Focus mode initialized")
 })
 
 // Initialize all listeners
@@ -525,6 +549,152 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "SCROLL_BURST_DETECTED") {
     incrementScrollBurst()
     broadcastCoiUpdate()
+  }
+
+  // Focus Mode message handlers
+  if (message.type === "TOGGLE_FOCUS_MODE") {
+    toggleFocusMode()
+      .then((state) => {
+        sendResponse({ state })
+      })
+      .catch((error) => {
+        console.error("TOGGLE_FOCUS_MODE failed:", error)
+        sendResponse({ error: error.message })
+      })
+    return true
+  }
+
+  if (message.type === "GET_FOCUS_STATE") {
+    const state = getFocusModeState()
+    sendResponse({ state })
+    return true
+  }
+
+  if (message.type === "TOGGLE_CATEGORY") {
+    const { category } = message.payload
+    toggleCategory(category as BlocklistCategory)
+      .then((state) => {
+        sendResponse({ state })
+      })
+      .catch((error) => {
+        console.error("TOGGLE_CATEGORY failed:", error)
+        sendResponse({ error: error.message })
+      })
+    return true
+  }
+
+  if (message.type === "SET_ENABLED_CATEGORIES") {
+    const { categories } = message.payload
+    setEnabledCategories(categories as BlocklistCategory[])
+      .then((state) => {
+        sendResponse({ state })
+      })
+      .catch((error) => {
+        console.error("SET_ENABLED_CATEGORIES failed:", error)
+        sendResponse({ error: error.message })
+      })
+    return true
+  }
+
+  if (message.type === "GET_BLOCKLIST") {
+    console.log("[Background] GET_BLOCKLIST request received")
+    loadBlocklist()
+      .then((blocklist) => {
+        console.log("[Background] Sending blocklist with", blocklist.entries.length, "entries")
+        sendResponse({ blocklist })
+      })
+      .catch((error) => {
+        console.error("GET_BLOCKLIST failed:", error)
+        sendResponse({ error: error.message })
+      })
+    return true
+  }
+
+  if (message.type === "ADD_BLOCKLIST_ENTRY") {
+    const { entry } = message.payload
+    addBlocklistEntry(entry as BlocklistEntry)
+      .then(async () => {
+        await refreshBlockingRules()
+        const blocklist = await loadBlocklist()
+        sendResponse({ success: true, blocklist })
+      })
+      .catch((error) => {
+        console.error("ADD_BLOCKLIST_ENTRY failed:", error)
+        sendResponse({ success: false, error: error.message })
+      })
+    return true
+  }
+
+  if (message.type === "UPDATE_BLOCKLIST_ENTRY") {
+    const { index, entry } = message.payload
+    updateBlocklistEntry(index, entry as BlocklistEntry)
+      .then(async () => {
+        await refreshBlockingRules()
+        const blocklist = await loadBlocklist()
+        sendResponse({ success: true, blocklist })
+      })
+      .catch((error) => {
+        console.error("UPDATE_BLOCKLIST_ENTRY failed:", error)
+        sendResponse({ success: false, error: error.message })
+      })
+    return true
+  }
+
+  if (message.type === "DELETE_BLOCKLIST_ENTRY") {
+    const { index } = message.payload
+    deleteBlocklistEntry(index)
+      .then(async () => {
+        await refreshBlockingRules()
+        const blocklist = await loadBlocklist()
+        sendResponse({ success: true, blocklist })
+      })
+      .catch((error) => {
+        console.error("DELETE_BLOCKLIST_ENTRY failed:", error)
+        sendResponse({ success: false, error: error.message })
+      })
+    return true
+  }
+
+  if (message.type === "UPDATE_CATEGORY_STATES") {
+    const { categoryStates } = message.payload
+    updateCategoryStates(categoryStates)
+      .then(async () => {
+        await refreshBlockingRules()
+        const blocklist = await loadBlocklist()
+        sendResponse({ success: true, blocklist })
+      })
+      .catch((error) => {
+        console.error("UPDATE_CATEGORY_STATES failed:", error)
+        sendResponse({ success: false, error: error.message })
+      })
+    return true
+  }
+
+  if (message.type === "IMPORT_BLOCKLIST") {
+    const { blocklist, mergeStrategy } = message.payload
+    importBlocklist(blocklist, mergeStrategy)
+      .then(async () => {
+        await refreshBlockingRules()
+        const updatedBlocklist = await loadBlocklist()
+        sendResponse({ success: true, blocklist: updatedBlocklist })
+      })
+      .catch((error) => {
+        console.error("IMPORT_BLOCKLIST failed:", error)
+        sendResponse({ success: false, error: error.message })
+      })
+    return true
+  }
+
+  if (message.type === "EXPORT_BLOCKLIST") {
+    exportBlocklist()
+      .then((blocklist) => {
+        sendResponse({ blocklist })
+      })
+      .catch((error) => {
+        console.error("EXPORT_BLOCKLIST failed:", error)
+        sendResponse({ error: error.message })
+      })
+    return true
   }
 })
 

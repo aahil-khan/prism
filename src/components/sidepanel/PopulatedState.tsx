@@ -6,6 +6,7 @@ import type { Label } from "~/background/labelsStore"
 import type { Project } from "~/types/project"
 import { CoiPanel } from "./CoiPanel"
 import { GraphPanel } from "./GraphPanel"
+import { FocusPanel } from "./FocusPanel"
 
 // Mock filter data - will be fetched from API
 const MOCK_FILTERS = [
@@ -347,6 +348,19 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
           }}>
           Projects
         </button>
+        <button
+          onClick={() => setActiveTab("focus")}
+          className={`px-4 py-2 text-sm font-medium transition-all rounded-t-lg ${
+            activeTab === "focus" ? "" : "opacity-60"
+          }`}
+          style={{
+            backgroundColor: activeTab === "focus" ? "white" : "transparent",
+            color: activeTab === "focus" ? "#0072de" : "#64748b",
+            borderBottom: activeTab === "focus" ? "2px solid #0072de" : "none",
+            fontFamily: "'Breeze Sans'"
+          }}>
+          Focus Mode
+        </button>
       </div>
 
       {/* Content */}
@@ -414,6 +428,8 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
               }}
             />
           </div>
+        ) : activeTab === "focus" ? (
+          <FocusPanel />
         ) : (
           <>
         {/* Sticky Search Bar Only */}
