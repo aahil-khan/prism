@@ -145,12 +145,12 @@ export async function checkPageForCandidate(
   )
   
   console.log("[ProjectDetection] Candidate status:", candidate.status, "Score:", candidate.score, "Already notified in session:", alreadyNotifiedInSession)
-  if (candidate.status === 'ready' && !candidate.notificationShown && !alreadyNotifiedInSession) {
+  if (candidate.status === 'ready' && !alreadyNotifiedInSession) {
     console.log("[ProjectDetection] ✅ Ready to notify!")
     return candidate
   }
 
-  console.log("[ProjectDetection] Not ready yet (status must be 'ready', currently:", candidate.status + ")")
+  console.log("[ProjectDetection] Not ready yet (status must be 'ready' and not already notified, currently:", candidate.status, "notified:", alreadyNotifiedInSession)
   return null
 }
 

@@ -115,13 +115,6 @@ const Indicator = () => {
       
       // Handle PROJECT_CANDIDATE_READY
       if (message.type === "PROJECT_CANDIDATE_READY") {
-        // Only show if onboarding is complete
-        if (!onboardingComplete) {
-          console.log("⏸️ Onboarding not complete, skipping PROJECT_CANDIDATE_READY notification")
-          sendResponse({ received: false, reason: "onboarding_incomplete" })
-          return true
-        }
-        
         console.log("📦 Project candidate detected:", message.payload)
         const { candidateId, primaryDomain, keywords, visitCount, score } = message.payload
         const keywordsText = keywords.length > 0 
@@ -147,13 +140,6 @@ const Indicator = () => {
       
       // Handle PROJECT_SUGGESTION_READY
       if (message.type === "PROJECT_SUGGESTION_READY") {
-        // Only show if onboarding is complete
-        if (!onboardingComplete) {
-          console.log("⏸️ Onboarding not complete, skipping PROJECT_SUGGESTION_READY notification")
-          sendResponse({ received: false, reason: "onboarding_incomplete" })
-          return true
-        }
-        
         console.log("💡 Project suggestion detected:", message.payload)
         const { projectId, projectName, currentUrl, currentTitle, score } = message.payload
         
@@ -176,13 +162,6 @@ const Indicator = () => {
       
       // Handle similar pages notification
       if (message.type === "show-page-notification" || message.type === "SHOW_SIMILAR_PAGES") {
-        // Only show if onboarding is complete
-        if (!onboardingComplete) {
-          console.log("⏸️ Onboarding not complete, skipping SHOW_SIMILAR_PAGES notification")
-          sendResponse({ received: false, reason: "onboarding_incomplete" })
-          return true
-        }
-        
         console.log("🔗 Similar pages detected:", message.data || message.payload)
         const data = message.data || message.payload
         const pages = data?.pages || []
