@@ -109,17 +109,18 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
   }
 
   const scrollTabToCenter = (tabName: string) => {
-    // Skip centering for first and last tabs
-    if (tabName === 'sessions' || tabName === 'focus') return
-
     if (tabScrollRef.current) {
       const buttons = tabScrollRef.current.querySelectorAll('button')
       let targetButton: Element | null = null
       
       buttons.forEach((btn) => {
-        if (tabName === 'graph' && btn.textContent?.includes('Knowledge')) {
+        if (tabName === 'sessions' && btn.textContent?.includes('Timeline')) {
+          targetButton = btn
+        } else if (tabName === 'graph' && btn.textContent?.includes('Knowledge')) {
           targetButton = btn
         } else if (tabName === 'projects' && btn.textContent?.includes('Projects')) {
+          targetButton = btn
+        } else if (tabName === 'focus' && btn.textContent?.includes('Focus')) {
           targetButton = btn
         }
       })
@@ -132,7 +133,7 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
         const scrollTarget = buttonLeft - (containerWidth / 2) + (buttonWidth / 2)
 
         container.scrollTo({
-          left: scrollTarget,
+          left: Math.max(0, scrollTarget),
           behavior: 'smooth'
         })
         setTimeout(checkTabScroll, 300)
