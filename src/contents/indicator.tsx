@@ -60,7 +60,8 @@ type Notification = {
 }
 
 const Indicator = () => {
-  const [isVisible, setIsVisible] = useState(true) // Always visible for testing
+  const [isVisible, setIsVisible] = useState(false) // Hidden until onboarding complete
+  const [onboardingComplete, setOnboardingComplete] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
   const [edgePosition, setEdgePosition] = useState<EdgePosition>('right')
@@ -75,9 +76,19 @@ const Indicator = () => {
   const [notificationExpanded, setNotificationExpanded] = useState(false)
 
 
-  // Load saved position from storage
+  // Load saved position and check onboarding status
   useEffect(() => {
-    chrome.storage.local.get(['konta-position'], (result) => {
+    chrome.storage.local.get(['konta-position', 'onboarding-complete'], (result) => {
+      // Check if onboarding is complete
+      if (result['onboarding-complete'] === true) {
+        console.log("✅ Onboarding complete, enabling indicator")
+        setOnboardingComplete(true)
+        setIsVisible(true)
+      } else {
+        console.log("⏳ Onboarding not complete, hiding indicator")
+        setOnboardingComplete(false)
+        setIsVisible(false)
+      }
       if (result['konta-position']) {
         const { edge, vertical } = result['konta-position']
         setEdgePosition(edge || 'right')
@@ -104,6 +115,13 @@ const Indicator = () => {
       
       // Handle PROJECT_CANDIDATE_READY
       if (message.type === "PROJECT_CANDIDATE_READY") {
+        // Only show if onboarding is complete
+        if (!onboardingComplete) {
+          console.log("⏸️ Onboarding not complete, skipping PROJECT_CANDIDATE_READY notification")
+          sendResponse({ received: false, reason: "onboarding_incomplete" })
+          return true
+        }
+        
         console.log("📦 Project candidate detected:", message.payload)
         const { candidateId, primaryDomain, keywords, visitCount, score } = message.payload
         const keywordsText = keywords.length > 0 
@@ -129,6 +147,13 @@ const Indicator = () => {
       
       // Handle PROJECT_SUGGESTION_READY
       if (message.type === "PROJECT_SUGGESTION_READY") {
+        // Only show if onboarding is complete
+        if (!onboardingComplete) {
+          console.log("⏸️ Onboarding not complete, skipping PROJECT_SUGGESTION_READY notification")
+          sendResponse({ received: false, reason: "onboarding_incomplete" })
+          return true
+        }
+        
         console.log("💡 Project suggestion detected:", message.payload)
         const { projectId, projectName, currentUrl, currentTitle, score } = message.payload
         
@@ -151,6 +176,13 @@ const Indicator = () => {
       
       // Handle similar pages notification
       if (message.type === "show-page-notification" || message.type === "SHOW_SIMILAR_PAGES") {
+        // Only show if onboarding is complete
+        if (!onboardingComplete) {
+          console.log("⏸️ Onboarding not complete, skipping SHOW_SIMILAR_PAGES notification")
+          sendResponse({ received: false, reason: "onboarding_incomplete" })
+          return true
+        }
+        
         console.log("🔗 Similar pages detected:", message.data || message.payload)
         const data = message.data || message.payload
         const pages = data?.pages || []
@@ -172,6 +204,32 @@ const Indicator = () => {
           setTimeout(() => setNotificationExpanded(true), 800)
           sendResponse({ received: true })
         }
+      }
+      
+      // Handle onboarding completion notification
+      if (message.type === "SHOW_ONBOARDING_COMPLETE") {
+        console.log("🎉 Onboarding complete, showing Konta is live notification")
+        
+        // Mark onboarding as complete
+        chrome.storage.local.set({ 'onboarding-complete': true }, () => {
+          console.log("✅ Onboarding completion flag stored")
+        })
+        setOnboardingComplete(true)
+        
+        const notification: Notification = {
+          id: `onboarding-${Date.now()}`,
+          type: 'learning',
+          title: message.title || "Konta is live!",
+          message: message.message || "Your intelligent browsing assistant is now active and learning your context.",
+          timestamp: Date.now()
+        }
+        setNotifications((prev) => [notification, ...prev])
+        setMode('notification')
+        setIsExpanded(false)
+        setIsVisible(true) // Make sure indicator is visible
+        // Auto-expand after 800ms
+        setTimeout(() => setNotificationExpanded(true), 800)
+        sendResponse({ received: true })
       }
       
       if (message.type === "SHOW_NOTIFICATION") {

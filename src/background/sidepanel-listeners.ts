@@ -21,6 +21,13 @@ export const setupOpenSidepanelListener = () => {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === "OPEN_SIDEPANEL") {
       console.log("🔵 Background received OPEN_SIDEPANEL message from tab:", sender.tab?.id)
+      
+      // Store onboarding flag if present
+      if (message.isOnboarding === true) {
+        console.log("🔵 Setting onboarding flag in storage")
+        chrome.storage.local.set({ "sidepanel-onboarding": true })
+      }
+      
       // Get the active tab's window and open side panel
       if (sender.tab?.windowId) {
         chrome.sidePanel.open({ windowId: sender.tab.windowId }).then(() => {

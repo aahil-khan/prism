@@ -23,6 +23,16 @@ const ConsentOverlay = () => {
   const [showLearnMore, setShowLearnMore] = useState(false)
 
   useEffect(() => {
+    // Check if we should show consent on page load
+    chrome.storage.local.get(['show-consent-on-load'], (result) => {
+      if (result['show-consent-on-load'] === true) {
+        console.log("📋 Auto-showing consent from storage flag")
+        setIsVisible(true)
+        // Clear the flag after using it
+        chrome.storage.local.remove('show-consent-on-load')
+      }
+    })
+
     // Listen for message to show consent
     const handleMessage = (message: any) => {
       console.log("Consent overlay received message:", message)
@@ -41,9 +51,12 @@ const ConsentOverlay = () => {
       chrome.runtime.sendMessage({ type: "CONSENT_GRANTED" })
       setIsVisible(false)
       
-      // Send message to background to open sidebar
-      console.log("📤 Sending OPEN_SIDEPANEL from consent")
-      chrome.runtime.sendMessage({ type: "OPEN_SIDEPANEL" }, (response) => {
+      // Send message to background to open sidebar with onboarding flag
+      console.log("📤 Sending OPEN_SIDEPANEL from consent with onboarding flag")
+      chrome.runtime.sendMessage({ 
+        type: "OPEN_SIDEPANEL",
+        isOnboarding: true 
+      }, (response) => {
         console.log("📨 Response:", response)
       })
     }

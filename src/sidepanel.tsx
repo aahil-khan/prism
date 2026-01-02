@@ -6,10 +6,11 @@ import { PopulatedState } from "@/components/sidepanel/PopulatedState"
 function IndexSidePanel() {
   const [showPopulated, setShowPopulated] = useState(false)
   const [activeTab, setActiveTab] = useState<string>("sessions") // Track active tab
+  const [isOnboarding, setIsOnboarding] = useState(false) // Track if in onboarding mode
 
   useEffect(() => {
     // Check if there's a preferred tab stored
-    chrome.storage.local.get("sidepanel-active-tab", (result) => {
+    chrome.storage.local.get(["sidepanel-active-tab", "sidepanel-onboarding"], (result) => {
       if (result["sidepanel-active-tab"]) {
         const tab = result["sidepanel-active-tab"]
         console.log("[Sidepanel] Setting active tab from storage:", tab)
@@ -17,6 +18,14 @@ function IndexSidePanel() {
         setActiveTab(tab as "sessions" | "graph" | "projects")
         // Clear the preference after using it
         chrome.storage.local.remove("sidepanel-active-tab")
+      }
+      
+      // Check if opened during onboarding
+      if (result["sidepanel-onboarding"] === true) {
+        console.log("[Sidepanel] Opened in onboarding mode")
+        setIsOnboarding(true)
+        // Clear the flag after using it
+        chrome.storage.local.remove("sidepanel-onboarding")
       }
     })
 
@@ -48,7 +57,10 @@ function IndexSidePanel() {
           initialTab={activeTab}
         />
       ) : (
-        <EmptyState onShowPopulated={() => setShowPopulated(true)} />
+        <EmptyState 
+          onShowPopulated={() => setShowPopulated(true)}
+          isOnboarding={isOnboarding}
+        />
       )}
     </div>
   )

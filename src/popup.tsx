@@ -26,16 +26,50 @@ function IndexPopup() {
   }, [])
 
   const handleWelcomeAccept = () => {
-    // Send message to content script to show consent overlay
+    // Get active tab to check if it's a new tab
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]?.id) {
-        chrome.tabs.sendMessage(tabs[0].id, { type: "SHOW_CONSENT" })
+      const activeTab = tabs[0]
+      if (!activeTab?.id || !activeTab?.url) return
+
+      // Check if we're on a new tab or chrome page
+      const isNewTab = activeTab.url.startsWith('chrome://') || 
+                       activeTab.url.startsWith('about:') ||
+                       activeTab.url === ''
+
+      if (isNewTab) {
+        // Store flag to show consent on next page load
+        chrome.storage.local.set({ 'show-consent-on-load': true })
+        
+        // Navigate to google.com first to get content script injected
+        chrome.tabs.update(activeTab.id, { url: 'https://www.google.com' }, (updatedTab) => {
+          if (updatedTab?.id) {
+            // Retry sending message multiple times as fallback
+            const retryCount = 6 // Try 6 times (every 500ms for 3 seconds total)
+            let attempt = 0
+            
+            const retryMessage = () => {
+              chrome.tabs.sendMessage(updatedTab.id, { type: "SHOW_CONSENT" }).catch(() => {
+                attempt++
+                if (attempt < retryCount) {
+                  setTimeout(retryMessage, 500)
+                }
+              })
+            }
+            
+            setTimeout(retryMessage, 500)
+          }
+        })
+      } else {
+        // Regular page, show consent directly
+        chrome.tabs.sendMessage(activeTab.id, { type: "SHOW_CONSENT" })
       }
     })
     window.close()
   }
 
-  const handleOpenPanel = async () => {
+  const handleOpenPopulated = async () => {
+    // Store preference to show populated state in sidepanel
+    chrome.storage.local.set({ "sidepanel-active-tab": "sessions" })
     await openSidePanel()
     window.close()
   }
@@ -50,7 +84,7 @@ function IndexPopup() {
       <WelcomeBackModal
         open={phase === "welcomeback"}
         onOpenChange={() => {}}
-        onOpenPanel={handleOpenPanel}
+        onOpenPopulated={handleOpenPopulated}
       />
     </div>
   )

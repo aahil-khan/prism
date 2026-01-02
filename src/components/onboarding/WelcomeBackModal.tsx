@@ -9,10 +9,10 @@ import {
 interface WelcomeBackModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onOpenPanel: () => void
+  onOpenPopulated: () => void
 }
 
-export function WelcomeBackModal({ open, onOpenChange, onOpenPanel }: WelcomeBackModalProps) {
+export function WelcomeBackModal({ open, onOpenChange, onOpenPopulated }: WelcomeBackModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogOverlay className="hidden" />
@@ -41,7 +41,7 @@ export function WelcomeBackModal({ open, onOpenChange, onOpenPanel }: WelcomeBac
             Nothing is shared automatically
           </p>
           <Button 
-            onClick={onOpenPanel}
+            onClick={onOpenPopulated}
             className="font-normal h-10 mt-4 border-0 focus:outline-none focus:ring-0 active:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 rounded-full px-6"
             style={{ backgroundColor: 'var(--primary)', color: 'white', fontFamily: "'Breeze Sans'", border: 'none', outline: 'none', boxShadow: 'none' }}>
             Open Memory Timeline
