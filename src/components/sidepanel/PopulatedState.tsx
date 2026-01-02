@@ -72,6 +72,77 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
   const [newLabelName, setNewLabelName] = useState("")
   const [newLabelColor, setNewLabelColor] = useState("#3B82F6")
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const tabScrollRef = useRef<HTMLDivElement | null>(null)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
+
+  const checkTabScroll = () => {
+    if (tabScrollRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = tabScrollRef.current
+      setCanScrollLeft(scrollLeft > 0)
+      setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 5)
+    }
+  }
+
+  useEffect(() => {
+    checkTabScroll()
+    const scrollContainer = tabScrollRef.current
+    if (scrollContainer) {
+      scrollContainer.addEventListener('scroll', checkTabScroll)
+      window.addEventListener('resize', checkTabScroll)
+      return () => {
+        scrollContainer.removeEventListener('scroll', checkTabScroll)
+        window.removeEventListener('resize', checkTabScroll)
+      }
+    }
+  }, [])
+
+  const scroll = (direction: 'left' | 'right') => {
+    if (tabScrollRef.current) {
+      const scrollAmount = 150
+      tabScrollRef.current.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth'
+      })
+      setTimeout(checkTabScroll, 300)
+    }
+  }
+
+  const scrollTabToCenter = (tabName: string) => {
+    // Skip centering for first and last tabs
+    if (tabName === 'sessions' || tabName === 'focus') return
+
+    if (tabScrollRef.current) {
+      const buttons = tabScrollRef.current.querySelectorAll('button')
+      let targetButton: Element | null = null
+      
+      buttons.forEach((btn) => {
+        if (tabName === 'graph' && btn.textContent?.includes('Knowledge')) {
+          targetButton = btn
+        } else if (tabName === 'projects' && btn.textContent?.includes('Projects')) {
+          targetButton = btn
+        }
+      })
+
+      if (targetButton) {
+        const container = tabScrollRef.current
+        const containerWidth = container.clientWidth
+        const buttonLeft = (targetButton as HTMLElement).offsetLeft
+        const buttonWidth = (targetButton as HTMLElement).offsetWidth
+        const scrollTarget = buttonLeft - (containerWidth / 2) + (buttonWidth / 2)
+
+        container.scrollTo({
+          left: scrollTarget,
+          behavior: 'smooth'
+        })
+        setTimeout(checkTabScroll, 300)
+      }
+    }
+  }
+
+  useEffect(() => {
+    scrollTabToCenter(activeTab)
+  }, [activeTab])
 
   useEffect(() => {
     // Initial load of sessions
@@ -307,88 +378,92 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
         <CoiPanel sessions={sessions} />
       </div> */}
 
-      {/* Tabs */}
-      <div 
-        className="overflow-x-auto border-b" 
-        style={{ 
-          borderColor: '#E5E5E5',
-          scrollbarWidth: 'thin',
-          scrollbarColor: '#D5D5D5 transparent'
-        }}
-      >
-        <style>{`
-          [style*="scrollbar-width: thin"] {
-            scrollbar-width: thin;
-            scrollbar-color: #D5D5D5 transparent;
-          }
-          [style*="scrollbar-width: thin"]::-webkit-scrollbar {
-            height: 4px;
-          }
-          [style*="scrollbar-width: thin"]::-webkit-scrollbar-track {
-            background: transparent;
-          }
-          [style*="scrollbar-width: thin"]::-webkit-scrollbar-thumb {
-            background-color: #D5D5D5;
-            border-radius: 2px;
-          }
-          [style*="scrollbar-width: thin"]::-webkit-scrollbar-thumb:hover {
-            background-color: #999;
-          }
-        `}</style>
-        <div className="flex gap-1 px-3 pt-3 pb-0 whitespace-nowrap">
-          <button
-            onClick={() => setActiveTab("sessions")}
-            className={`px-4 py-2 text-sm font-medium transition-all rounded-t-lg flex-shrink-0 ${
-              activeTab === "sessions" ? "" : "opacity-60"
-            }`}
-            style={{
-              backgroundColor: activeTab === "sessions" ? "white" : "transparent",
-              color: activeTab === "sessions" ? "#0072de" : "#64748b",
-              borderBottom: activeTab === "sessions" ? "2px solid #0072de" : "none",
-              fontFamily: "'Breeze Sans'"
-            }}>
-            Timeline
-          </button>
-          <button
-            onClick={() => setActiveTab("graph")}
-            className={`px-4 py-2 text-sm font-medium transition-all rounded-t-lg flex-shrink-0 ${
-              activeTab === "graph" ? "" : "opacity-60"
-            }`}
-            style={{
-              backgroundColor: activeTab === "graph" ? "white" : "transparent",
-              color: activeTab === "graph" ? "#0072de" : "#64748b",
-              borderBottom: activeTab === "graph" ? "2px solid #0072de" : "none",
-              fontFamily: "'Breeze Sans'"
-            }}>
-            Knowledge Graph
-          </button>
-          <button
-            onClick={() => setActiveTab("projects")}
-            className={`px-4 py-2 text-sm font-medium transition-all rounded-t-lg flex-shrink-0 ${
-              activeTab === "projects" ? "" : "opacity-60"
-            }`}
-            style={{
-              backgroundColor: activeTab === "projects" ? "white" : "transparent",
-              color: activeTab === "projects" ? "#0072de" : "#64748b",
-              borderBottom: activeTab === "projects" ? "2px solid #0072de" : "none",
-              fontFamily: "'Breeze Sans'"
-            }}>
-            Projects
-          </button>
-          <button
-            onClick={() => setActiveTab("focus")}
-            className={`px-4 py-2 text-sm font-medium transition-all rounded-t-lg flex-shrink-0 ${
-              activeTab === "focus" ? "" : "opacity-60"
-            }`}
-            style={{
-              backgroundColor: activeTab === "focus" ? "white" : "transparent",
-              color: activeTab === "focus" ? "#0072de" : "#64748b",
-              borderBottom: activeTab === "focus" ? "2px solid #0072de" : "none",
-              fontFamily: "'Breeze Sans'"
-            }}>
-            Focus Mode
-          </button>
+      {/* Tabs with Navigation Arrows */}
+      <div className="flex items-center border-b gap-1 px-2" style={{ borderColor: '#E5E5E5' }}>
+        {/* Left Arrow */}
+        <button
+          onClick={() => scroll('left')}
+          disabled={!canScrollLeft}
+          className="flex-shrink-0 p-1.5 transition-colors rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+          style={{ color: '#9A9FA6' }}>
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+
+        {/* Tabs Container */}
+        <div 
+          ref={tabScrollRef}
+          className="overflow-x-hidden flex-1"
+          style={{
+            scrollBehavior: 'smooth'
+          }}>
+          <div className="flex gap-1 pt-3 pb-0 whitespace-nowrap">
+            <button
+              onClick={() => setActiveTab("sessions")}
+              className={`px-4 py-2 text-sm font-medium transition-all rounded-t-lg flex-shrink-0 ${
+                activeTab === "sessions" ? "" : "opacity-60"
+              }`}
+              style={{
+                backgroundColor: activeTab === "sessions" ? "white" : "transparent",
+                color: activeTab === "sessions" ? "#0072de" : "#64748b",
+                borderBottom: activeTab === "sessions" ? "2px solid #0072de" : "none",
+                fontFamily: "'Breeze Sans'"
+              }}>
+              Timeline
+            </button>
+            <button
+              onClick={() => setActiveTab("graph")}
+              className={`px-4 py-2 text-sm font-medium transition-all rounded-t-lg flex-shrink-0 ${
+                activeTab === "graph" ? "" : "opacity-60"
+              }`}
+              style={{
+                backgroundColor: activeTab === "graph" ? "white" : "transparent",
+                color: activeTab === "graph" ? "#0072de" : "#64748b",
+                borderBottom: activeTab === "graph" ? "2px solid #0072de" : "none",
+                fontFamily: "'Breeze Sans'"
+              }}>
+              Knowledge Graph
+            </button>
+            <button
+              onClick={() => setActiveTab("projects")}
+              className={`px-4 py-2 text-sm font-medium transition-all rounded-t-lg flex-shrink-0 ${
+                activeTab === "projects" ? "" : "opacity-60"
+              }`}
+              style={{
+                backgroundColor: activeTab === "projects" ? "white" : "transparent",
+                color: activeTab === "projects" ? "#0072de" : "#64748b",
+                borderBottom: activeTab === "projects" ? "2px solid #0072de" : "none",
+                fontFamily: "'Breeze Sans'"
+              }}>
+              Projects
+            </button>
+            <button
+              onClick={() => setActiveTab("focus")}
+              className={`px-4 py-2 text-sm font-medium transition-all rounded-t-lg flex-shrink-0 ${
+                activeTab === "focus" ? "" : "opacity-60"
+              }`}
+              style={{
+                backgroundColor: activeTab === "focus" ? "white" : "transparent",
+                color: activeTab === "focus" ? "#0072de" : "#64748b",
+                borderBottom: activeTab === "focus" ? "2px solid #0072de" : "none",
+                fontFamily: "'Breeze Sans'"
+              }}>
+              Focus Mode
+            </button>
+          </div>
         </div>
+
+        {/* Right Arrow */}
+        <button
+          onClick={() => scroll('right')}
+          disabled={!canScrollRight}
+          className="flex-shrink-0 p-1.5 transition-colors rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+          style={{ color: '#9A9FA6' }}>
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
       </div>
 
       {/* Content */}
