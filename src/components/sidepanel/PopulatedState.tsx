@@ -1058,35 +1058,8 @@ function ProjectsPanel({
   onUpdateProject,
   onDeleteProject
 }: ProjectsPanelProps) {
-  const [isDetecting, setIsDetecting] = useState(false)
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
-  const [showMockProject, setShowMockProject] = useState(false)
-  const DEV_MODE = true // Set to false to hide mock project and dev buttons
-
-  const mockProject: Project = {
-    id: "mock-project-1",
-    name: "React Documentation Study",
-    description: "Deep dive into React hooks and patterns",
-    startDate: Date.now() - 3 * 24 * 60 * 60 * 1000,
-    endDate: Date.now() - 1 * 24 * 60 * 60 * 1000,
-    sessionIds: ["session-1", "session-2", "session-3"],
-    keywords: ["hooks", "state management", "react patterns", "useEffect", "custom hooks"],
-    topDomains: ["react.dev", "github.com", "stackoverflow.com"],
-    status: "active",
-    createdAt: Date.now() - 5 * 24 * 60 * 60 * 1000,
-    autoDetected: true,
-    score: 87
-  }
-
-  const handleDetect = async () => {
-    setIsDetecting(true)
-    try {
-      await onDetectProjects()
-    } finally {
-      setIsDetecting(false)
-    }
-  }
 
   const handleStartEdit = (project: Project) => {
     setEditingProjectId(project.id)
@@ -1121,91 +1094,24 @@ function ProjectsPanel({
             Projects
           </h2>
           <p className="text-xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
-            {(projects.length + (DEV_MODE && showMockProject ? 1 : 0)) === 0 ? "No projects detected yet" : `${projects.length + (DEV_MODE && showMockProject ? 1 : 0)} project${(projects.length + (DEV_MODE && showMockProject ? 1 : 0)) === 1 ? '' : 's'} found`}
+            {projects.length === 0 ? "No projects detected yet" : `${projects.length} project${projects.length === 1 ? '' : 's'} found`}
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {DEV_MODE && (
-            <>
-              <button
-                onClick={() => setShowMockProject(!showMockProject)}
-                className="px-2 py-1.5 rounded text-xs font-medium transition-all hover:opacity-75"
-                style={{ 
-                  backgroundColor: showMockProject ? '#FFE5E5' : '#E5E5E5',
-                  color: showMockProject ? '#B00020' : '#9A9FA6',
-                  fontFamily: "'Breeze Sans'"
-                }}
-                title="Toggle mock project for dev testing">
-                Mock
-              </button>
-              <button
-                onClick={async () => {
-                  // Create a test candidate with one less visit than needed
-                  // User will manually visit the page to trigger notification
-                  await sendMessage({
-                    type: "CREATE_TEST_CANDIDATE",
-                    payload: {
-                      domain: "github.com",
-                      keywords: ["prism", "aahil-khan", "typescript"]
-                      // visitCount defaults to MIN_VISITS - 1
-                    }
-                  })
-                  console.log("Test candidate created. Visit https://github.com/aahil-khan/prism to trigger notification.")
-                }}
-                className="px-2 py-1.5 rounded text-xs font-medium transition-all hover:opacity-75"
-                style={{ 
-                  backgroundColor: '#FFF3E0',
-                  color: '#E65100',
-                  fontFamily: "'Breeze Sans'"
-                }}
-                title="Create test candidate (visit page to trigger)">
-                Create Test
-              </button>
-              <button
-                onClick={async () => {
-                  // Clear all candidates
-                  await sendMessage({
-                    type: "CLEAR_ALL_CANDIDATES"
-                  })
-                  console.log("Cleared all candidates")
-                }}
-                className="px-2 py-1.5 rounded text-xs font-medium transition-all hover:opacity-75"
-                style={{ 
-                  backgroundColor: '#FFEBEE',
-                  color: '#C62828',
-                  fontFamily: "'Breeze Sans'"
-                }}
-                title="Clear all test candidates">
-                Clear
-              </button>
-            </>
-          )}
-          <button
-            onClick={handleDetect}
-            disabled={isDetecting}
-            className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-90 disabled:opacity-50"
-            style={{ backgroundColor: '#0074FB', color: 'white', fontFamily: "'Breeze Sans'" }}>
-            {isDetecting ? "Detecting..." : "Detect Projects"}
-          </button>
         </div>
       </div>
 
       {/* Projects List */}
-      {projects.length === 0 && (!DEV_MODE || !showMockProject) ? (
+      {projects.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 gap-4">
           <Folder className="h-12 w-12 opacity-30" style={{ color: '#9A9FA6' }} />
           <div className="text-center">
             <p className="text-sm mb-1" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
-              No projects detected yet
-            </p>
-            <p className="text-xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
-              Click "Detect Projects" to find patterns in your browsing
+              No projects found
             </p>
           </div>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {(DEV_MODE && showMockProject ? [mockProject, ...projects] : projects)
+          {projects
             .sort((a, b) => b.startDate - a.startDate)
             .map((project) => (
               <ProjectCard
@@ -1220,13 +1126,7 @@ function ProjectsPanel({
                 onStartEdit={() => handleStartEdit(project)}
                 onSaveEdit={() => handleSaveEdit(project.id)}
                 onCancelEdit={handleCancelEdit}
-                onDelete={() => {
-                  if (project.id === "mock-project-1") {
-                    setShowMockProject(false)
-                  } else {
-                    handleDelete(project.id)
-                  }
-                }}
+                onDelete={() => handleDelete(project.id)}
               />
             ))}
         </div>
@@ -1265,14 +1165,6 @@ function ProjectCard({
 }: ProjectCardProps) {
   const [editingDescription, setEditingDescription] = useState(false)
   const [editDescriptionValue, setEditDescriptionValue] = useState(project.description || "")
-
-  const statusColors = {
-    active: { bg: '#E8F5E9', text: '#2E7D32' },
-    stale: { bg: '#FFF3E0', text: '#E65100' },
-    completed: { bg: '#E3F2FD', text: '#1565C0' }
-  }
-
-  const statusColor = statusColors[project.status]
 
   const duration = Math.ceil((project.endDate - project.startDate) / (1000 * 60 * 60 * 24))
   const startDateStr = new Date(project.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -1361,18 +1253,6 @@ function ProjectCard({
             </>
           ) : (
             <>
-              {/* Status Badge */}
-              <span
-                className="px-2 py-0.5 rounded text-2xs font-medium whitespace-nowrap"
-                style={{ 
-                  backgroundColor: statusColor.bg, 
-                  color: statusColor.text,
-                  fontSize: '10px',
-                  fontFamily: "'Breeze Sans'"
-                }}>
-                {project.status}
-              </span>
-              
               {/* Auto-detected Badge */}
               {project.autoDetected && (
                 <span
@@ -1642,13 +1522,13 @@ function ProjectCard({
             <button
               onClick={(e) => {
                 e.stopPropagation()
-                setIsExpanded(true)
+                onToggle()
               }}
               className="text-2xs py-1 px-2 rounded text-left transition-colors hover:bg-gray-100"
               style={{ color: '#667eea', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
               + {project.sites.length - 3} more site{project.sites.length - 3 === 1 ? '' : 's'}
             </button>
-          )}
+          )}    
         </div>
       )}
 
