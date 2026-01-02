@@ -10,7 +10,7 @@ import { extractResourceIdentifier, type ResourceIdentifier } from "~/lib/resour
 
 
 // Dev mode flag - set to true to use lower thresholds for faster testing
-const DEV_MODE = false // Set to true to test with lower thresholds
+const DEV_MODE = true // Set to true to test with lower thresholds
 
 // There are tunable thresholds for candidate qualification
 const THRESHOLDS = DEV_MODE ? {
@@ -22,7 +22,7 @@ const THRESHOLDS = DEV_MODE ? {
 } : {
   MIN_VISITS: 3,        // Production
   MIN_SESSIONS: 2,      // Production
-  MIN_SCORE: 50,        // Production //changed from 60 to 50 
+  MIN_SCORE: 50,        // Production
   MAX_AGE_DAYS: 7,
   MIN_DURATION_HOURS: 1, // Production
 }

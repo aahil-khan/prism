@@ -1,37 +1,28 @@
 /**
- * Content script that shows subtle notification banner when a project candidate is ready.
- * Listens for PROJECT_CANDIDATE_READY messages from background script.
+ * LEGACY: Content script for project notifications
+ * 
+ * ⚠️ DISABLED - Migrated to unified indicator hub (indicator.tsx)
+ * 
+ * This content script previously showed banner notifications for:
+ * - PROJECT_CANDIDATE_READY (new project detection)
+ * - PROJECT_SUGGESTION_READY (add page to existing project)
+ * 
+ * All functionality has been moved to the unified notification hub.
+ * Kept for reference only.
  */
 
 import type { PlasmoCSConfig } from "plasmo"
 
 export const config: PlasmoCSConfig = {
   matches: ["<all_urls>"],
-  run_at: "document_start"  // Changed to document_start to ensure early injection
+  run_at: "document_start"
 }
 
-console.log("[ProjectNotification] Content script loaded!")
+console.log("[ProjectNotification] LEGACY content script - DISABLED")
+console.log("[ProjectNotification] All notifications now handled by indicator hub")
 
-// Listener function
-function handleMessage(message: any, sender: any, sendResponse: any) {
-  console.log("[ProjectNotification] Message received:", message)
-  if (message.type === "PROJECT_CANDIDATE_READY") {
-    console.log("[ProjectNotification] Project candidate ready! Showing notification...")
-    const { candidateId, primaryDomain, keywords, visitCount, score, scoreBreakdown } = message.payload
-    showProjectNotification(candidateId, primaryDomain, keywords, visitCount, score, scoreBreakdown)
-    sendResponse({ received: true })
-  }
-  if (message.type === "PROJECT_SUGGESTION_READY") {
-    console.log("[ProjectNotification] Project suggestion ready! Showing notification...")
-    const { projectId, projectName, currentUrl, currentTitle, score } = message.payload
-    showProjectSuggestion(projectId, projectName, currentUrl, currentTitle, score)
-    sendResponse({ received: true })
-  }
-  return true
-}
-
-// Register listener
-chrome.runtime.onMessage.addListener(handleMessage)
+// DISABLED: All message handlers commented out
+// This file is kept for reference but no longer active
 
 function showProjectNotification(
   candidateId: string,

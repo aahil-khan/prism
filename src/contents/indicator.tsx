@@ -2,7 +2,8 @@ import type { PlasmoCSConfig } from "plasmo"
 import { useEffect, useState } from "react"
 
 export const config: PlasmoCSConfig = {
-  matches: ["<all_urls>"]
+  matches: ["<all_urls>"],
+  run_at: "document_start"
 }
 
 export const getShadowHostId = () => "konta-notification-hub"
@@ -31,13 +32,34 @@ export const getStyle = () => {
         transform: translateX(0);
       }
     }
+    
+    @keyframes slideInFromTop {
+      from {
+        transform: translateY(-10px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
   `
   return style
 }
 
 type EdgePosition = 'left' | 'right'
 
-const KontaNotificationHub = () => {
+type Notification = {
+  id: string
+  type: 'learning' | 'candidate' | 'suggestion' | 'similar-pages'
+  title: string
+  message?: string
+  timestamp: number
+  score?: number
+  payload?: any // Store original payload for actions
+}
+
+const Indicator = () => {
   const [isVisible, setIsVisible] = useState(true) // Always visible for testing
   const [isHovered, setIsHovered] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
@@ -48,6 +70,9 @@ const KontaNotificationHub = () => {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [tempPosition, setTempPosition] = useState({ x: 0, y: 0 })
   const [closeTimeout, setCloseTimeout] = useState<NodeJS.Timeout | null>(null)
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [mode, setMode] = useState<'normal' | 'notification'>('normal')
+  const [notificationExpanded, setNotificationExpanded] = useState(false)
 
 
   // Load saved position from storage
@@ -71,11 +96,102 @@ const KontaNotificationHub = () => {
   useEffect(() => {
     console.log("🟢 Konta notification hub loaded!")
     
-    const handleMessage = (message: any) => {
+    const handleMessage = (message: any, sender: any, sendResponse: any) => {
       console.log("Konta hub received message:", message)
       if (message.type === "SIDEPANEL_CLOSED") {
         setIsVisible(true)
       }
+      
+      // Handle PROJECT_CANDIDATE_READY
+      if (message.type === "PROJECT_CANDIDATE_READY") {
+        console.log("📦 Project candidate detected:", message.payload)
+        const { candidateId, primaryDomain, keywords, visitCount, score } = message.payload
+        const keywordsText = keywords.length > 0 
+          ? keywords.slice(0, 3).join(", ") 
+          : primaryDomain
+        
+        const notification: Notification = {
+          id: candidateId,
+          type: 'candidate',
+          title: 'Project Detected',
+          message: `Working on project related to ${keywordsText}. Track it?`,
+          timestamp: Date.now(),
+          score,
+          payload: message.payload // Store for actions
+        }
+        setNotifications((prev) => [notification, ...prev])
+        setMode('notification')
+        setIsExpanded(false)
+        // Auto-expand after 800ms
+        setTimeout(() => setNotificationExpanded(true), 800)
+        sendResponse({ received: true })
+      }
+      
+      // Handle PROJECT_SUGGESTION_READY
+      if (message.type === "PROJECT_SUGGESTION_READY") {
+        console.log("💡 Project suggestion detected:", message.payload)
+        const { projectId, projectName, currentUrl, currentTitle, score } = message.payload
+        
+        const notification: Notification = {
+          id: `suggestion-${projectId}-${Date.now()}`,
+          type: 'suggestion',
+          title: `Related to ${projectName}`,
+          message: `This page seems related to your ${projectName} project. Add it?`,
+          timestamp: Date.now(),
+          score: Math.round(score * 100), // Convert 0-1 to percentage
+          payload: message.payload // Store for actions
+        }
+        setNotifications((prev) => [notification, ...prev])
+        setMode('notification')
+        setIsExpanded(false)
+        // Auto-expand after 800ms
+        setTimeout(() => setNotificationExpanded(true), 800)
+        sendResponse({ received: true })
+      }
+      
+      // Handle similar pages notification
+      if (message.type === "show-page-notification" || message.type === "SHOW_SIMILAR_PAGES") {
+        console.log("🔗 Similar pages detected:", message.data || message.payload)
+        const data = message.data || message.payload
+        const pages = data?.pages || []
+        
+        if (pages.length > 0) {
+          const titles = pages.map(p => p.title || p.url).slice(0, 2).join(", ")
+          const notification: Notification = {
+            id: `similar-${Date.now()}`,
+            type: 'similar-pages',
+            title: `${pages.length} similar page${pages.length > 1 ? 's' : ''} found`,
+            message: titles + (pages.length > 2 ? `, and ${pages.length - 2} more` : ''),
+            timestamp: Date.now(),
+            payload: { pages, count: pages.length }
+          }
+          setNotifications((prev) => [notification, ...prev])
+          setMode('notification')
+          setIsExpanded(false)
+          // Auto-expand after 800ms
+          setTimeout(() => setNotificationExpanded(true), 800)
+          sendResponse({ received: true })
+        }
+      }
+      
+      if (message.type === "SHOW_NOTIFICATION") {
+        const notification: Notification = {
+          id: Date.now().toString(),
+          type: message.payload?.type || 'learning',
+          title: message.payload?.title || '',
+          message: message.payload?.message,
+          timestamp: Date.now()
+        }
+        setNotifications((prev) => [notification, ...prev])
+        setMode('notification')
+        setIsExpanded(false)
+        // Auto-expand if there's a message
+        if (notification.message) {
+          setTimeout(() => setNotificationExpanded(true), 800)
+        }
+      }
+      
+      return true // Keep channel open for async responses
     }
 
     chrome.runtime.onMessage.addListener(handleMessage)
@@ -155,9 +271,16 @@ const KontaNotificationHub = () => {
 
   const handleClick = async () => {
     if (isDragging) return
-    // Clicking icon collapses the wheel if expanded
-    if (isExpanded) {
-      setIsExpanded(false)
+    if (mode === 'notification') {
+      // In notification mode, click toggles expansion
+      if (notifications[0]?.message) {
+        setNotificationExpanded(!notificationExpanded)
+      }
+    } else {
+      // In normal mode, clicking icon collapses the wheel if expanded
+      if (isExpanded) {
+        setIsExpanded(false)
+      }
     }
   }
 
@@ -231,7 +354,10 @@ const KontaNotificationHub = () => {
     if (edgePosition === 'right') {
       baseStyle.right = 0
       baseStyle.left = 'auto'
-      if (isExpanded) {
+      if (mode === 'notification') {
+        // In notification mode, slide out completely to show icon + notification
+        baseStyle.transform = 'translateX(0)'
+      } else if (isExpanded) {
         baseStyle.transform = 'translateX(0)'
       } else if (isHovered) {
         baseStyle.transform = 'translateX(-8px)'
@@ -241,7 +367,10 @@ const KontaNotificationHub = () => {
     } else {
       baseStyle.left = 0
       baseStyle.right = 'auto'
-      if (isExpanded) {
+      if (mode === 'notification') {
+        // In notification mode, slide out completely to show icon + notification
+        baseStyle.transform = 'translateX(0)'
+      } else if (isExpanded) {
         baseStyle.transform = 'translateX(0)'
       } else if (isHovered) {
         baseStyle.transform = 'translateX(8px)'
@@ -309,11 +438,11 @@ const KontaNotificationHub = () => {
         zIndex: 2147483647,
         display: "flex",
         flexDirection: "row",
-        alignItems: "center",
+        alignItems: "flex-start",
         userSelect: 'none'
       }}
       onMouseEnter={() => {
-        if (!isDragging) {
+        if (!isDragging && mode === 'normal') {
           // Clear any pending close timeout
           if (closeTimeout) {
             clearTimeout(closeTimeout)
@@ -324,7 +453,7 @@ const KontaNotificationHub = () => {
         }
       }}
       onMouseLeave={() => {
-        if (!isDragging) {
+        if (!isDragging && mode === 'normal') {
           setIsHovered(false)
           // Delay closing by 2 seconds
           const timeout = setTimeout(() => {
@@ -341,8 +470,10 @@ const KontaNotificationHub = () => {
           width: "48px",
           height: "48px",
           background: "linear-gradient(135deg, #0072de 0%, #0056b3 100%)",
-          borderRadius: edgePosition === 'right' ? "8px 0 0 8px" : "0 8px 8px 0",
-          cursor: isExpanded ? 'pointer' : 'default',
+          borderRadius: mode === 'notification' 
+            ? (edgePosition === 'right' ? "0 0 0 0" : "0 0 0 0")
+            : (edgePosition === 'right' ? "8px 0 0 8px" : "0 8px 8px 0"),
+          cursor: 'pointer',
           boxShadow: "0 2px 12px rgba(0, 0, 0, 0.15)",
           display: "flex",
           alignItems: "center",
@@ -395,8 +526,8 @@ const KontaNotificationHub = () => {
         </svg>
       </div>
 
-      {/* Radial Options Wheel */}
-      {true && (
+      {/* NORMAL MODE - Radial Options Wheel */}
+      {mode === 'normal' && (
         <div
           style={{
             position: 'absolute',
@@ -460,8 +591,408 @@ const KontaNotificationHub = () => {
           })}
         </div>
       )}
+
+      {/* NOTIFICATION MODE - Slide out notification */}
+      {mode === 'notification' && notifications.length > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            order: edgePosition === 'right' ? 0 : 3,
+            position: 'relative'
+          }}>
+          {/* Single row with title */}
+          <div
+            style={{
+              backgroundColor: 'white',
+              border: '1px solid #E5E5E5',
+              borderRadius: edgePosition === 'right' ? '8px 0 0 0' : '0 8px 0 0',
+              padding: '0 16px',
+              minWidth: '200px',
+              maxWidth: '280px',
+              height: '48px',
+              boxShadow: '0 2px 12px rgba(0, 0, 0, 0.08)',
+              fontFamily: "'Breeze Sans', sans-serif",
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              animation: edgePosition === 'right' ? 'slideInFromRight 0.3s ease' : 'slideInFromLeft 0.3s ease',
+              cursor: notifications[0]?.message ? 'pointer' : 'default'
+            }}
+            onClick={() => {
+              if (notifications[0]?.message) {
+                setNotificationExpanded(!notificationExpanded)
+              }
+            }}>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: '#080A0B', flex: 1 }}>
+              {notifications[0]?.title}
+            </div>
+            {/* Score badge */}
+            {notifications[0]?.score && (
+              <div style={{
+                backgroundColor: 'rgba(0, 114, 222, 0.1)',
+                color: '#0072de',
+                padding: '2px 8px',
+                borderRadius: '12px',
+                fontSize: '11px',
+                fontWeight: 600,
+                marginRight: '8px'
+              }}>
+                {notifications[0].score}% confident
+              </div>
+            )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setNotifications([])
+                setMode('normal')
+              }}
+              style={{
+                fontSize: '18px',
+                color: '#9A9FA6',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 0,
+                width: '20px',
+                height: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}>
+              ×
+            </button>
+          </div>
+
+          {/* Expanded message content */}
+          {notificationExpanded && notifications[0]?.message && (
+            <div
+              style={{
+                backgroundColor: 'white',
+                border: '1px solid #E5E5E5',
+                borderTop: 'none',
+                borderRadius: edgePosition === 'right' ? '0 0 8px 0' : '0 0 0 8px',
+                padding: '12px 16px',
+                minWidth: '200px',
+                maxWidth: '280px',
+                boxShadow: '0 2px 12px rgba(0, 0, 0, 0.08)',
+                fontFamily: "'Breeze Sans', sans-serif",
+                animation: 'slideInFromTop 0.2s ease',
+                fontSize: '12px',
+                color: '#666',
+                lineHeight: 1.4,
+                position: 'absolute',
+                top: '48px',
+                [edgePosition === 'right' ? 'right' : 'left']: '0'
+              }}>
+              <div style={{ marginBottom: '12px' }}>
+                {notifications[0].message}
+              </div>
+              
+              {/* Score breakdown for candidate notifications */}
+              {notifications[0].type === 'candidate' && notifications[0].payload?.scoreBreakdown && (
+                <div style={{
+                  marginBottom: '12px',
+                  paddingTop: '12px',
+                  paddingBottom: '8px',
+                  borderTop: '1px solid #E5E5E5',
+                  borderBottom: '1px solid #E5E5E5'
+                }}>
+                  {(() => {
+                    const breakdown = notifications[0].payload.scoreBreakdown
+                    const items = [
+                      { label: `Visits (${notifications[0].payload.visitCount})`, value: breakdown.visits, max: 40 },
+                      { label: 'Sessions', value: breakdown.sessions, max: 30 },
+                      { label: 'Resources', value: breakdown.resources, max: 20 },
+                      { label: 'Time span', value: breakdown.timeSpan, max: 10 }
+                    ]
+                    return items.map((item, idx) => (
+                      <div key={idx} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginBottom: '6px',
+                        fontSize: '11px',
+                        color: '#666'
+                      }}>
+                        <span style={{ minWidth: '80px' }}>{item.label}</span>
+                        <div style={{
+                          flex: 1,
+                          height: '4px',
+                          background: 'rgba(0, 114, 222, 0.1)',
+                          borderRadius: '2px',
+                          margin: '0 8px',
+                          overflow: 'hidden'
+                        }}>
+                          <div style={{
+                            height: '100%',
+                            background: '#0072de',
+                            borderRadius: '2px',
+                            width: `${(item.value / item.max) * 100}%`,
+                            transition: 'width 0.3s ease'
+                          }} />
+                        </div>
+                        <span style={{ minWidth: '40px', textAlign: 'right' }}>
+                          {item.value}/{item.max}
+                        </span>
+                      </div>
+                    ))
+                  })()}
+                </div>
+              )}
+              
+              {/* Action buttons for candidate notifications */}
+              {notifications[0].type === 'candidate' && (
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      console.log("✅ Track Project clicked for candidate:", notifications[0].id)
+                      const candidateId = notifications[0].id
+                      
+                      // Open sidepanel first (must be in user gesture)
+                      chrome.runtime.sendMessage({ type: "OPEN_SIDEPANEL_TO_PROJECTS" })
+                      
+                      // Then promote the candidate
+                      chrome.runtime.sendMessage({
+                        type: "PROMOTE_CANDIDATE",
+                        payload: { candidateId }
+                      })
+                      
+                      // Dismiss notification
+                      setNotifications([])
+                      setMode('normal')
+                    }}
+                    style={{
+                      backgroundColor: '#0072de',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '8px 12px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      flex: 1,
+                      fontFamily: "'Breeze Sans', sans-serif",
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#0056b3'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = '#0072de'
+                    }}>
+                    Track Project
+                  </button>
+                  
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      console.log("⏭️ Not Now clicked, snoozing candidate:", notifications[0].id)
+                      
+                      // Snooze the candidate
+                      chrome.runtime.sendMessage({
+                        type: "SNOOZE_CANDIDATE",
+                        payload: { candidateId: notifications[0].id }
+                      })
+                      
+                      // Dismiss notification
+                      setNotifications([])
+                      setMode('normal')
+                    }}
+                    style={{
+                      backgroundColor: 'rgba(0, 0, 0, 0.05)',
+                      color: '#666',
+                      border: '1px solid #E5E5E5',
+                      borderRadius: '6px',
+                      padding: '8px 12px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      flex: 1,
+                      fontFamily: "'Breeze Sans', sans-serif",
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.08)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.05)'
+                    }}>
+                    Not Now
+                  </button>
+                </div>
+              )}
+              
+              {/* Action buttons for suggestion notifications */}
+              {notifications[0].type === 'suggestion' && (
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      console.log("➕ Add to Project clicked:", notifications[0].payload)
+                      const { projectId, currentUrl, currentTitle } = notifications[0].payload
+                      
+                      // Add site to project
+                      chrome.runtime.sendMessage({
+                        type: "ADD_SITE_TO_PROJECT",
+                        payload: {
+                          projectId,
+                          siteUrl: currentUrl,
+                          siteTitle: currentTitle,
+                          addedBy: 'auto'
+                        }
+                      })
+                      
+                      // Dismiss notification
+                      setNotifications([])
+                      setMode('normal')
+                    }}
+                    style={{
+                      backgroundColor: '#10b981',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '8px 12px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      flex: 1,
+                      fontFamily: "'Breeze Sans', sans-serif",
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#059669'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = '#10b981'
+                    }}>
+                    Add to Project
+                  </button>
+                  
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      console.log("⏭️ Dismissed suggestion:", notifications[0].payload)
+                      
+                      // Record dismissal
+                      chrome.runtime.sendMessage({
+                        type: "DISMISS_PROJECT_SUGGESTION",
+                        payload: {
+                          projectId: notifications[0].payload.projectId,
+                          url: notifications[0].payload.currentUrl
+                        }
+                      })
+                      
+                      // Dismiss notification
+                      setNotifications([])
+                      setMode('normal')
+                    }}
+                    style={{
+                      backgroundColor: 'rgba(0, 0, 0, 0.05)',
+                      color: '#666',
+                      border: '1px solid #E5E5E5',
+                      borderRadius: '6px',
+                      padding: '8px 12px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      flex: 1,
+                      fontFamily: "'Breeze Sans', sans-serif",
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.08)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.05)'
+                    }}>
+                    Not Now
+                  </button>
+                </div>
+              )}
+              
+              {/* Action buttons for similar pages notifications */}
+              {notifications[0].type === 'similar-pages' && (
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      console.log("🔗 Open All clicked:", notifications[0].payload.pages)
+                      
+                      // Open all similar pages in new tabs
+                      notifications[0].payload.pages.forEach(({ url }) => {
+                        const fullUrl = url.startsWith('http') ? url : `https://${url}`
+                        window.open(fullUrl, '_blank')
+                      })
+                      
+                      // Dismiss notification
+                      setNotifications([])
+                      setMode('normal')
+                    }}
+                    style={{
+                      backgroundColor: '#0072de',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '8px 12px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      flex: 1,
+                      fontFamily: "'Breeze Sans', sans-serif",
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#0056b3'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = '#0072de'
+                    }}>
+                    Open All
+                  </button>
+                  
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      console.log("⏭️ Dismissed similar pages")
+                      
+                      // Dismiss notification
+                      setNotifications([])
+                      setMode('normal')
+                    }}
+                    style={{
+                      backgroundColor: 'rgba(0, 0, 0, 0.05)',
+                      color: '#666',
+                      border: '1px solid #E5E5E5',
+                      borderRadius: '6px',
+                      padding: '8px 12px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      flex: 1,
+                      fontFamily: "'Breeze Sans', sans-serif",
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.08)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.05)'
+                    }}>
+                    Dismiss
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
-      )
+  )
 }
 
-export default KontaNotificationHub
+export default Indicator
