@@ -39,6 +39,12 @@ async function sendMessage<T>(message: any): Promise<T> {
   })
 }
 
+const isNewTabUrl = (url?: string) => {
+  if (!url) return true
+  const normalized = url.toLowerCase()
+  return normalized.startsWith("chrome://newtab") || normalized.startsWith("edge://newtab") || normalized === "about:blank"
+}
+
 interface PopulatedStateProps {
   onShowEmpty?: () => void
   initialTab?: string
@@ -52,6 +58,8 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
   const [labels, setLabels] = useState<Label[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [results, setResults] = useState<SearchResult[]>([])
+  const [currentPage, setCurrentPage] = useState<{ url: string; title: string } | null>(null)
+  const [quickAddRequest, setQuickAddRequest] = useState<{ url: string; title: string } | null>(null)
 
   // Update activeTab when initialTab changes
   useEffect(() => {
@@ -59,6 +67,20 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
       setActiveTab(initialTab as "sessions" | "graph" | "projects" | "focus")
     }
   }, [initialTab])
+
+  useEffect(() => {
+    chrome.storage.local.get("sidepanel-add-current-page", (result) => {
+      const pending = result["sidepanel-add-current-page"] as { url?: string; title?: string } | undefined
+      if (pending?.url && !isNewTabUrl(pending.url)) {
+        setQuickAddRequest({ url: pending.url, title: pending.title || pending.url })
+        setActiveTab("projects")
+      }
+      if (pending) {
+        chrome.storage.local.remove("sidepanel-add-current-page")
+      }
+      fetchCurrentTab()
+    })
+  }, [])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
@@ -78,6 +100,17 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
   const tabScrollRef = useRef<HTMLDivElement | null>(null)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
+
+  const fetchCurrentTab = () => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const tab = tabs[0]
+      if (tab?.url && !isNewTabUrl(tab.url)) {
+        setCurrentPage({ url: tab.url, title: tab.title || tab.url })
+      } else {
+        setCurrentPage(null)
+      }
+    })
+  }
 
   const checkTabScroll = () => {
     if (tabScrollRef.current) {
@@ -146,6 +179,12 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
 
   useEffect(() => {
     scrollTabToCenter(activeTab)
+  }, [activeTab])
+
+  useEffect(() => {
+    if (activeTab === "projects") {
+      fetchCurrentTab()
+    }
   }, [activeTab])
 
   useEffect(() => {
@@ -599,6 +638,10 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
                   console.error("Failed to delete project:", err)
                 }
               }}
+              currentPage={currentPage}
+              quickAddRequest={quickAddRequest}
+              onCompleteQuickAdd={() => setQuickAddRequest(null)}
+              onRefreshCurrentPage={fetchCurrentTab}
             />
           </div>
         ) : activeTab === "focus" ? (
@@ -1481,6 +1524,10 @@ interface ProjectsPanelProps {
   onDetectProjects: () => Promise<void>
   onUpdateProject: (projectId: string, updates: Partial<Project>) => Promise<void>
   onDeleteProject: (projectId: string) => Promise<void>
+  currentPage: { url: string; title: string } | null
+  quickAddRequest?: { url: string; title: string } | null
+  onCompleteQuickAdd?: () => void
+  onRefreshCurrentPage?: () => void
 }
 
 function ProjectsPanel({
@@ -1490,10 +1537,35 @@ function ProjectsPanel({
   onToggleProject,
   onDetectProjects,
   onUpdateProject,
-  onDeleteProject
+  onDeleteProject,
+  currentPage,
+  quickAddRequest,
+  onCompleteQuickAdd,
+  onRefreshCurrentPage
 }: ProjectsPanelProps) {
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("")
+  const [adding, setAdding] = useState(false)
+  const [addMessage, setAddMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+
+  const targetPage = useMemo(() => quickAddRequest || currentPage, [quickAddRequest, currentPage])
+
+  useEffect(() => {
+    if (projects.length > 0 && (!selectedProjectId || !projects.find((p) => p.id === selectedProjectId))) {
+      setSelectedProjectId(projects[0].id)
+    }
+  }, [projects, selectedProjectId])
+
+  useEffect(() => {
+    if (quickAddRequest && projects.length > 0) {
+      setSelectedProjectId(projects[0].id)
+    }
+  }, [quickAddRequest, projects])
+
+  useEffect(() => {
+    setAddMessage(null)
+  }, [targetPage?.url, selectedProjectId])
 
   const handleStartEdit = (project: Project) => {
     setEditingProjectId(project.id)
@@ -1519,8 +1591,106 @@ function ProjectsPanel({
     }
   }
 
+  const handleAddCurrentPage = async () => {
+    if (!targetPage || !selectedProjectId) return
+
+    setAdding(true)
+    setAddMessage(null)
+
+    try {
+      const response = await sendMessage<{ success: boolean; alreadyAdded?: boolean; error?: string }>({
+        type: "ADD_SITE_TO_PROJECT",
+        payload: {
+          projectId: selectedProjectId,
+          siteUrl: targetPage.url,
+          siteTitle: targetPage.title,
+          addedBy: "user"
+        }
+      })
+
+      if (response?.success || response?.alreadyAdded) {
+        setAddMessage({ type: "success", text: response?.alreadyAdded ? "Already in this project" : "Added to project" })
+        onCompleteQuickAdd?.()
+      } else {
+        setAddMessage({ type: "error", text: response?.error || "Unable to add page" })
+      }
+    } catch (err) {
+      setAddMessage({ type: "error", text: "Unable to add page" })
+    } finally {
+      setAdding(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
+      {targetPage && (
+        <div
+          className="rounded-xl border p-3 bg-white shadow-sm"
+          style={{ borderColor: '#E5E5E5' }}>
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <div className="flex-1 min-w-0">
+              <div className="text-2xs mb-1" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
+                Current page
+              </div>
+              <div className="text-sm font-semibold truncate" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+                {targetPage.title || targetPage.url}
+              </div>
+              <div className="text-2xs truncate" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
+                {targetPage.url}
+              </div>
+            </div>
+            {onRefreshCurrentPage && (
+              <button
+                onClick={onRefreshCurrentPage}
+                className="px-2 py-1 text-xs rounded border transition-colors"
+                style={{ borderColor: '#E5E5E5', color: '#0072de', fontFamily: "'Breeze Sans'" }}>
+                Refresh
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={selectedProjectId}
+              onChange={(e) => setSelectedProjectId(e.target.value)}
+              className="flex-1 min-w-[180px] px-3 py-2 text-sm rounded border"
+              style={{ borderColor: '#E5E5E5', color: '#080A0B', fontFamily: "'Breeze Sans'" }}
+              disabled={projects.length === 0}>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleAddCurrentPage}
+              disabled={!selectedProjectId || adding || projects.length === 0}
+              className="px-3 py-2 text-sm rounded text-white transition-colors disabled:opacity-60"
+              style={{ backgroundColor: '#0072de', fontFamily: "'Breeze Sans'" }}>
+              {adding ? 'Adding...' : 'Add to project'}
+            </button>
+          </div>
+
+          {projects.length === 0 && (
+            <div className="text-2xs mt-2" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
+              Create or detect a project to add this page.
+            </div>
+          )}
+
+          {addMessage && (
+            <div
+              className="text-2xs mt-2"
+              style={{
+                color: addMessage.type === 'success' ? '#0f9d58' : '#b00020',
+                fontFamily: "'Breeze Sans'",
+                fontSize: '10px'
+              }}>
+              {addMessage.text}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Header with Detect Button */}
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-1">
