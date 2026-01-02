@@ -606,7 +606,7 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
         ) : (
           <>
         {/* Sticky Search Bar Only */}
-        <div className="sticky top-0 z-20 bg-white px-2 pt-4 pb-2 -mx-0">
+        <div className="sticky top-0 z-20 bg-white px-2 pt-4">
           {/* Back Button and Search Bar */}
           <div className="flex items-center gap-2 mb-5">
             {/* <button className="p-2" onClick={onShowEmpty} style={{ color: '#9A9FA6' }}>
@@ -626,46 +626,50 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
           </div>
         </div>
 
-        {/* Scrollable Filters Section */}
+        {/* Filters Section */}
         <div className="bg-white px-2 pb-2">
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Show first 3 labels or all if expanded */}
-            {labels.slice(0, expandFilters ? labels.length : 3).map((label) => (
+          <div className="flex items-center gap-1.5">
+            {/* Always show first 3 labels */}
+            {labels.slice(0, 3).map((label) => (
               <button
                 key={label.id}
                 onClick={() => {
                   setSelectedLabelId(selectedLabelId === label.id ? null : label.id)
                 }}
-                className="px-4 py-2 rounded-full text-xs font-medium transition-all"
+                className="px-3 py-1.5 rounded-full text-2xs font-medium transition-all"
                 style={{
                   backgroundColor: selectedLabelId === label.id ? (label.color || '#000000') : '#FFFFFF',
                   color: selectedLabelId === label.id ? '#FFFFFF' : '#000000',
                   border: `1px solid ${label.color || '#000000'}`,
                   fontFamily: "'Breeze Sans'",
+                  fontSize: '10px'
                 }}>
                 {label.name}
               </button>
             ))}
 
-            {/* Add Label Button */}
+            {/* Add Label Button - Icon Only */}
             <button
               onClick={() => setShowAddLabelModal(true)}
-              className="px-3 py-2 rounded-full text-xs font-medium transition-all"
+              className="px-2.5 py-1.5 rounded-full text-xs font-medium transition-all flex items-center justify-center"
               style={{
                 backgroundColor: '#F5F5F5',
                 color: '#666',
                 border: '1px dashed #CCC',
                 fontFamily: "'Breeze Sans'",
-              }}>
-              + Add
+                width: '28px',
+                height: '28px',
+              }}
+              title="Add label">
+              +
             </button>
 
             {/* More/Less button */}
             {labels.length > 3 && (
               <button
                 onClick={() => setExpandFilters(!expandFilters)}
-                className="inline-flex items-center gap-1 text-xs font-medium transition-colors ml-auto"
-                style={{ color: '#000000', fontFamily: "'Breeze Sans'" }}>
+                className="inline-flex items-center gap-0.5 text-2xs font-medium transition-colors ml-auto"
+                style={{ color: '#000000', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
                 {expandFilters ? "Less" : "More"}
                 <ChevronDown
                   className={`h-3 w-3 transition-transform ${expandFilters ? "rotate-180" : ""}`}
@@ -673,6 +677,28 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
               </button>
             )}
           </div>
+          {/* Expanded Labels - Display Below in Grid */}
+          {expandFilters && labels.length > 3 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {labels.slice(3).map((label) => (
+                <button
+                  key={label.id}
+                  onClick={() => {
+                    setSelectedLabelId(selectedLabelId === label.id ? null : label.id)
+                  }}
+                  className="px-3 py-1.5 rounded-full text-2xs font-medium transition-all"
+                  style={{
+                    backgroundColor: selectedLabelId === label.id ? (label.color || '#000000') : '#FFFFFF',
+                    color: selectedLabelId === label.id ? '#FFFFFF' : '#000000',
+                    border: `1px solid ${label.color || '#000000'}`,
+                    fontFamily: "'Breeze Sans'",
+                    fontSize: '10px'
+                  }}>
+                  {label.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
             {/* dev: number of pages indexed */}
           {/* <div className="flex items-center justify-between px-1 text-xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
