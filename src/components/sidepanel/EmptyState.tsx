@@ -89,11 +89,11 @@ export function EmptyState({ onShowPopulated, isOnboarding = false }: EmptyState
       {/* Header */}
       <div className="sticky top-0 z-10 flex items-center justify-between p-6 border-b bg-white" style={{ borderColor: '#E5E5E5' }}>
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg flex-shrink-0" style={{ backgroundColor: 'var(--primary)' }} />
+          <img src={chrome.runtime.getURL('assets/konta_logo.svg')} alt="Konta" className="w-8 h-8" />
           <h1 
             className="text-xl font"
             style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
-            Aegis
+            Konta
           </h1>
         </div>
         

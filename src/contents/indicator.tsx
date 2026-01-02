@@ -419,18 +419,17 @@ const Indicator = () => {
     return baseStyle
   }
 
-  // Simple geometric Konta logo
+  // Render Konta logo from assets
   const KontaIcon = () => (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-      {/* Abstract K shape - geometric style */}
-      <path 
-        d="M7 4 L7 20 M7 12 L17 4 M7 12 L17 20" 
-        stroke="white" 
-        strokeWidth="2.5" 
-        strokeLinecap="round" 
-        strokeLinejoin="round"
-      />
-    </svg>
+    <img 
+      src={chrome.runtime.getURL('assets/konta_logo.svg')} 
+      alt="Konta" 
+      style={{ 
+        width: "24px", 
+        height: "24px",
+        filter: "brightness(0) invert(1)"
+      }} 
+    />
   )
 
   // Radial menu options

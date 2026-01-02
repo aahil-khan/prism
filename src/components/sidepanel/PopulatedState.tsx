@@ -465,11 +465,11 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
             <ArrowLeft className="h-5 w-5" />
             <span className="sr-only">Back</span>
           </button>
-          <div className="w-8 h-8 rounded-lg flex-shrink-0" style={{ backgroundColor: 'var(--primary)' }} />
+          <img src={chrome.runtime.getURL('assets/konta_logo.svg')} alt="Konta" className="w-8 h-8" />
           <h1 
             className="text-xl font"
             style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
-            Aegis
+            Konta
           </h1>
         </div>
         

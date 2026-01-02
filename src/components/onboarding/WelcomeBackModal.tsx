@@ -23,8 +23,8 @@ export function WelcomeBackModal({ open, onOpenChange, onOpenPopulated }: Welcom
           padding: '24px'
         }}>
         <div className="flex flex-col items-center">
-          {/* Placeholder Logo */} 
-          <div className="w-12 h-12 rounded-2xl -mt-2" style={{ backgroundColor: 'var(--primary)' }} />
+          {/* Logo */} 
+          <img src={chrome.runtime.getURL('assets/konta_logo.svg')} alt="Konta" className="w-12 h-12 -mt-2" />
           
           <DialogTitle className="text-2xl font-normal text-center mt-4" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
             Welcome back to Aegis!
