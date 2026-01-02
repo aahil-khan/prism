@@ -45,8 +45,8 @@ interface PopulatedStateProps {
 }
 
 export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps) {
-  const [activeTab, setActiveTab] = useState<"sessions" | "graph" | "projects">(
-    (initialTab as "sessions" | "graph" | "projects") || "sessions"
+  const [activeTab, setActiveTab] = useState<"sessions" | "graph" | "projects" | "focus">(
+    (initialTab as "sessions" | "graph" | "projects" | "focus") || "sessions"
   )
   const [sessions, setSessions] = useState<Session[]>([])
   const [labels, setLabels] = useState<Label[]>([])
@@ -56,7 +56,7 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
   // Update activeTab when initialTab changes
   useEffect(() => {
     if (initialTab) {
-      setActiveTab(initialTab as "sessions" | "graph" | "projects")
+      setActiveTab(initialTab as "sessions" | "graph" | "projects" | "focus")
     }
   }, [initialTab])
   const [loading, setLoading] = useState(false)
@@ -308,59 +308,87 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
       </div> */}
 
       {/* Tabs */}
-      <div className="px-3 pt-3 flex gap-1 border-b" style={{ borderColor: '#E5E5E5' }}>
-        <button
-          onClick={() => setActiveTab("sessions")}
-          className={`px-4 py-2 text-sm font-medium transition-all rounded-t-lg ${
-            activeTab === "sessions" ? "" : "opacity-60"
-          }`}
-          style={{
-            backgroundColor: activeTab === "sessions" ? "white" : "transparent",
-            color: activeTab === "sessions" ? "#0072de" : "#64748b",
-            borderBottom: activeTab === "sessions" ? "2px solid #0072de" : "none",
-            fontFamily: "'Breeze Sans'"
-          }}>
-          Timeline
-        </button>
-        <button
-          onClick={() => setActiveTab("graph")}
-          className={`px-4 py-2 text-sm font-medium transition-all rounded-t-lg ${
-            activeTab === "graph" ? "" : "opacity-60"
-          }`}
-          style={{
-            backgroundColor: activeTab === "graph" ? "white" : "transparent",
-            color: activeTab === "graph" ? "#0072de" : "#64748b",
-            borderBottom: activeTab === "graph" ? "2px solid #0072de" : "none",
-            fontFamily: "'Breeze Sans'"
-          }}>
-          Knowledge Graph
-        </button>
-        <button
-          onClick={() => setActiveTab("projects")}
-          className={`px-4 py-2 text-sm font-medium transition-all rounded-t-lg ${
-            activeTab === "projects" ? "" : "opacity-60"
-          }`}
-          style={{
-            backgroundColor: activeTab === "projects" ? "white" : "transparent",
-            color: activeTab === "projects" ? "#0072de" : "#64748b",
-            borderBottom: activeTab === "projects" ? "2px solid #0072de" : "none",
-            fontFamily: "'Breeze Sans'"
-          }}>
-          Projects
-        </button>
-        <button
-          onClick={() => setActiveTab("focus")}
-          className={`px-4 py-2 text-sm font-medium transition-all rounded-t-lg ${
-            activeTab === "focus" ? "" : "opacity-60"
-          }`}
-          style={{
-            backgroundColor: activeTab === "focus" ? "white" : "transparent",
-            color: activeTab === "focus" ? "#0072de" : "#64748b",
-            borderBottom: activeTab === "focus" ? "2px solid #0072de" : "none",
-            fontFamily: "'Breeze Sans'"
-          }}>
-          Focus Mode
-        </button>
+      <div 
+        className="overflow-x-auto border-b" 
+        style={{ 
+          borderColor: '#E5E5E5',
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#D5D5D5 transparent'
+        }}
+      >
+        <style>{`
+          [style*="scrollbar-width: thin"] {
+            scrollbar-width: thin;
+            scrollbar-color: #D5D5D5 transparent;
+          }
+          [style*="scrollbar-width: thin"]::-webkit-scrollbar {
+            height: 4px;
+          }
+          [style*="scrollbar-width: thin"]::-webkit-scrollbar-track {
+            background: transparent;
+          }
+          [style*="scrollbar-width: thin"]::-webkit-scrollbar-thumb {
+            background-color: #D5D5D5;
+            border-radius: 2px;
+          }
+          [style*="scrollbar-width: thin"]::-webkit-scrollbar-thumb:hover {
+            background-color: #999;
+          }
+        `}</style>
+        <div className="flex gap-1 px-3 pt-3 pb-0 whitespace-nowrap">
+          <button
+            onClick={() => setActiveTab("sessions")}
+            className={`px-4 py-2 text-sm font-medium transition-all rounded-t-lg flex-shrink-0 ${
+              activeTab === "sessions" ? "" : "opacity-60"
+            }`}
+            style={{
+              backgroundColor: activeTab === "sessions" ? "white" : "transparent",
+              color: activeTab === "sessions" ? "#0072de" : "#64748b",
+              borderBottom: activeTab === "sessions" ? "2px solid #0072de" : "none",
+              fontFamily: "'Breeze Sans'"
+            }}>
+            Timeline
+          </button>
+          <button
+            onClick={() => setActiveTab("graph")}
+            className={`px-4 py-2 text-sm font-medium transition-all rounded-t-lg flex-shrink-0 ${
+              activeTab === "graph" ? "" : "opacity-60"
+            }`}
+            style={{
+              backgroundColor: activeTab === "graph" ? "white" : "transparent",
+              color: activeTab === "graph" ? "#0072de" : "#64748b",
+              borderBottom: activeTab === "graph" ? "2px solid #0072de" : "none",
+              fontFamily: "'Breeze Sans'"
+            }}>
+            Knowledge Graph
+          </button>
+          <button
+            onClick={() => setActiveTab("projects")}
+            className={`px-4 py-2 text-sm font-medium transition-all rounded-t-lg flex-shrink-0 ${
+              activeTab === "projects" ? "" : "opacity-60"
+            }`}
+            style={{
+              backgroundColor: activeTab === "projects" ? "white" : "transparent",
+              color: activeTab === "projects" ? "#0072de" : "#64748b",
+              borderBottom: activeTab === "projects" ? "2px solid #0072de" : "none",
+              fontFamily: "'Breeze Sans'"
+            }}>
+            Projects
+          </button>
+          <button
+            onClick={() => setActiveTab("focus")}
+            className={`px-4 py-2 text-sm font-medium transition-all rounded-t-lg flex-shrink-0 ${
+              activeTab === "focus" ? "" : "opacity-60"
+            }`}
+            style={{
+              backgroundColor: activeTab === "focus" ? "white" : "transparent",
+              color: activeTab === "focus" ? "#0072de" : "#64748b",
+              borderBottom: activeTab === "focus" ? "2px solid #0072de" : "none",
+              fontFamily: "'Breeze Sans'"
+            }}>
+            Focus Mode
+          </button>
+        </div>
       </div>
 
       {/* Content */}
