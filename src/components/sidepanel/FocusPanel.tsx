@@ -411,12 +411,12 @@ export function FocusPanel() {
         </div>
       </div>
 
-      {/* Info Footer */}
+      {/* Info Footer
       <div className="p-3 border-t" style={{ borderColor: '#E5E7EB', backgroundColor: '#F9FAFB' }}>
         <p className="text-xs" style={{ color: '#6B7280' }}>
           💡 <strong>Tip:</strong> Use <code className="px-1 py-0.5 bg-gray-200 rounded">*.example.com</code> to block all subdomains
         </p>
-      </div>
+      </div> */}
     </div>
   )
 }

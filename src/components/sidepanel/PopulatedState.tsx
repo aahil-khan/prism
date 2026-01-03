@@ -638,6 +638,7 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
                   console.error("Failed to delete project:", err)
                 }
               }}
+              onProjectsUpdate={setProjects}
               currentPage={currentPage}
               quickAddRequest={quickAddRequest}
               onCompleteQuickAdd={() => setQuickAddRequest(null)}
@@ -1524,6 +1525,7 @@ interface ProjectsPanelProps {
   onDetectProjects: () => Promise<void>
   onUpdateProject: (projectId: string, updates: Partial<Project>) => Promise<void>
   onDeleteProject: (projectId: string) => Promise<void>
+  onProjectsUpdate?: (projects: Project[]) => void
   currentPage: { url: string; title: string } | null
   quickAddRequest?: { url: string; title: string } | null
   onCompleteQuickAdd?: () => void
@@ -1538,6 +1540,7 @@ function ProjectsPanel({
   onDetectProjects,
   onUpdateProject,
   onDeleteProject,
+  onProjectsUpdate,
   currentPage,
   quickAddRequest,
   onCompleteQuickAdd,
@@ -1548,6 +1551,10 @@ function ProjectsPanel({
   const [selectedProjectId, setSelectedProjectId] = useState<string>("")
   const [adding, setAdding] = useState(false)
   const [addMessage, setAddMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  const [showCreateCard, setShowCreateCard] = useState(false)
+  const [newProjectName, setNewProjectName] = useState("")
+  const [newProjectDescription, setNewProjectDescription] = useState("")
+  const [creating, setCreating] = useState(false)
 
   const targetPage = useMemo(() => quickAddRequest || currentPage, [quickAddRequest, currentPage])
 
@@ -1591,6 +1598,49 @@ function ProjectsPanel({
     }
   }
 
+  const handleCreateProject = async () => {
+    if (!newProjectName.trim()) return
+
+    setCreating(true)
+    let created = false
+    try {
+      const response = await sendMessage<{ success: boolean; project?: Project }>({
+        type: "ADD_PROJECT",
+        payload: {
+          name: newProjectName.trim(),
+          description: newProjectDescription.trim() || undefined,
+          sessionIds: [],
+          sites: [],
+          autoDetected: false
+        }
+      })
+
+      if (response?.success) {
+        created = true
+        const projectsResponse = await sendMessage<{ projects: Project[] }>({
+          type: "GET_PROJECTS"
+        })
+
+        if (projectsResponse?.projects) {
+          onProjectsUpdate?.(projectsResponse.projects)
+        }
+
+        // Immediately close and reset the create card
+        setShowCreateCard(false)
+        setNewProjectName("")
+        setNewProjectDescription("")
+      }
+    } catch (err) {
+      console.error("Failed to create project:", err)
+    } finally {
+      if (created) {
+        // Fallback: ensure card closes even if re-render timing is off
+        setShowCreateCard(false)
+      }
+      setCreating(false)
+    }
+  }
+
   const handleAddCurrentPage = async () => {
     if (!targetPage || !selectedProjectId) return
 
@@ -1610,6 +1660,23 @@ function ProjectsPanel({
 
       if (response?.success || response?.alreadyAdded) {
         setAddMessage({ type: "success", text: response?.alreadyAdded ? "Already in this project" : "Added to project" })
+        
+        // Reload projects to show updated site list
+        try {
+          const projectsResponse = await sendMessage<{ projects: Project[] }>({ 
+            type: "GET_PROJECTS" 
+          })
+          if (projectsResponse?.projects) {
+            // Update the projects in the parent component
+            const updatedProject = projectsResponse.projects.find(p => p.id === selectedProjectId)
+            if (updatedProject) {
+              await onUpdateProject(selectedProjectId, { sites: updatedProject.sites })
+            }
+          }
+        } catch (refreshErr) {
+          console.error("Failed to refresh projects after adding site:", refreshErr)
+        }
+        
         onCompleteQuickAdd?.()
       } else {
         setAddMessage({ type: "error", text: response?.error || "Unable to add page" })
@@ -1650,32 +1717,61 @@ function ProjectsPanel({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="flex-1 min-w-[180px] px-3 py-2 text-sm rounded border"
-              style={{ borderColor: '#E5E5E5', color: '#080A0B', fontFamily: "'Breeze Sans'" }}
-              disabled={projects.length === 0}>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={handleAddCurrentPage}
-              disabled={!selectedProjectId || adding || projects.length === 0}
-              className="px-3 py-2 text-sm rounded text-white transition-colors disabled:opacity-60"
-              style={{ backgroundColor: '#0072de', fontFamily: "'Breeze Sans'" }}>
-              {adding ? 'Adding...' : 'Add to project'}
-            </button>
+            {(() => {
+              // Filter out projects that already have this site
+              const availableProjects = targetPage 
+                ? projects.filter(p => !p.sites.some(s => s.url === targetPage.url))
+                : projects
+
+              return (
+                <>
+                  <select
+                    value={selectedProjectId && availableProjects.some(p => p.id === selectedProjectId) ? selectedProjectId : (availableProjects[0]?.id || "")}
+                    onChange={(e) => setSelectedProjectId(e.target.value)}
+                    className="flex-1 min-w-[180px] px-3 py-2 text-sm rounded border"
+                    style={{ borderColor: '#E5E5E5', color: '#080A0B', fontFamily: "'Breeze Sans'" }}
+                    disabled={availableProjects.length === 0}>
+                    {availableProjects.map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleAddCurrentPage}
+                    disabled={!selectedProjectId || adding || availableProjects.length === 0}
+                    className="px-3 py-2 text-sm rounded text-white transition-colors disabled:opacity-60"
+                    style={{ backgroundColor: '#0072de', fontFamily: "'Breeze Sans'" }}>
+                    {adding ? 'Adding...' : 'Add to project'}
+                  </button>
+                </>
+              )
+            })()}
           </div>
 
-          {projects.length === 0 && (
-            <div className="text-2xs mt-2" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
-              Create or detect a project to add this page.
-            </div>
-          )}
+          {(() => {
+            const availableProjects = targetPage 
+              ? projects.filter(p => !p.sites.some(s => s.url === targetPage.url))
+              : projects
+
+            if (availableProjects.length === 0 && projects.length > 0) {
+              return (
+                <div className="text-2xs mt-2" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
+                  This page is already in all your projects.
+                </div>
+              )
+            }
+
+            if (availableProjects.length === 0) {
+              return (
+                <div className="text-2xs mt-2" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
+                  Create or detect a project to add this page.
+                </div>
+              )
+            }
+
+            return null
+          })()}
 
           {addMessage && (
             <div
@@ -1691,20 +1787,122 @@ function ProjectsPanel({
         </div>
       )}
 
-      {/* Header with Detect Button */}
+      {/* Header with Create Project Button */}
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-1">
           <h2 className="text-lg font-semibold" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
             Projects
           </h2>
           <p className="text-xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
-            {projects.length === 0 ? "No projects detected yet" : `${projects.length} project${projects.length === 1 ? '' : 's'} found`}
+            {projects.length === 0 ? "No projects yet" : `${projects.length} project${projects.length === 1 ? '' : 's'}`}
           </p>
         </div>
+        <button
+          onClick={() => {
+            setShowCreateCard(!showCreateCard)
+            setNewProjectName("")
+            setNewProjectDescription("")
+          }}
+          className="px-3 py-2 text-sm rounded text-white transition-colors flex items-center gap-2"
+          style={{ backgroundColor: showCreateCard ? '#9A9FA6' : '#0072de', fontFamily: "'Breeze Sans'" }}>
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {showCreateCard ? (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            ) : (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            )}
+          </svg>
+          {showCreateCard ? 'Cancel' : 'New Project'}
+        </button>
       </div>
 
+      {/* Create Project Card */}
+      {showCreateCard && (
+        <div
+          className="rounded-xl border p-4 bg-white shadow-sm"
+          style={{ borderColor: '#0072de', borderWidth: '2px' }}>
+          <div className="flex items-center gap-2 mb-3">
+            <Folder className="h-5 w-5" style={{ color: '#0072de' }} />
+            <h3 className="text-base font-semibold" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+              Create New Project
+            </h3>
+          </div>
+          
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium" style={{ color: '#555', fontFamily: "'Breeze Sans'" }}>
+                Project Name <span style={{ color: '#EF4444' }}>*</span>
+              </label>
+              <input
+                type="text"
+                value={newProjectName}
+                onChange={(e) => setNewProjectName(e.target.value)}
+                placeholder="e.g., Machine Learning Research"
+                className="w-full px-3 py-2 text-sm rounded border"
+                style={{ 
+                  fontFamily: "'Breeze Sans'",
+                  borderColor: '#E5E5E5',
+                  backgroundColor: '#FFFFFF',
+                  color: '#080A0B'
+                }}
+                autoFocus
+              />
+            </div>
+            
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium" style={{ color: '#555', fontFamily: "'Breeze Sans'" }}>
+                Description (Optional)
+              </label>
+              <textarea
+                value={newProjectDescription}
+                onChange={(e) => setNewProjectDescription(e.target.value)}
+                placeholder="Add notes about this project..."
+                className="w-full px-3 py-2 text-sm rounded border resize-none"
+                style={{ 
+                  fontFamily: "'Breeze Sans'",
+                  minHeight: '80px',
+                  borderColor: '#E5E5E5',
+                  backgroundColor: '#FFFFFF',
+                  color: '#080A0B'
+                }}
+              />
+            </div>
+            
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => {
+                  setShowCreateCard(false)
+                  setNewProjectName("")
+                  setNewProjectDescription("")
+                }}
+                disabled={creating}
+                className="px-3 py-2 text-sm rounded border transition-colors"
+                style={{ 
+                  borderColor: '#E5E5E5',
+                  color: '#080A0B',
+                  fontFamily: "'Breeze Sans'",
+                  backgroundColor: '#FFFFFF'
+                }}>
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateProject}
+                disabled={!newProjectName.trim() || creating}
+                className="px-3 py-2 text-sm rounded transition-colors disabled:opacity-50"
+                style={{ 
+                  backgroundColor: '#0072de',
+                  color: 'white',
+                  fontFamily: "'Breeze Sans'"
+                }}>
+                {creating ? 'Creating...' : 'Create Project'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Projects List */}
-      {projects.length === 0 ? (
+      {projects.length === 0 && !showCreateCard ? (
         <div className="flex flex-col items-center justify-center py-12 gap-4">
           <Folder className="h-12 w-12 opacity-30" style={{ color: '#9A9FA6' }} />
           <div className="text-center">
@@ -1731,6 +1929,10 @@ function ProjectsPanel({
                 onSaveEdit={() => handleSaveEdit(project.id)}
                 onCancelEdit={handleCancelEdit}
                 onDelete={() => handleDelete(project.id)}
+                onRemoveSite={async (siteUrl) => {
+                  const updatedSites = (project.sites || []).filter(s => s.url !== siteUrl)
+                  await onUpdateProject(project.id, { sites: updatedSites })
+                }}
               />
             ))}
         </div>
@@ -1752,6 +1954,7 @@ interface ProjectCardProps {
   onSaveEdit: () => void
   onCancelEdit: () => void
   onDelete: () => void
+  onRemoveSite?: (siteUrl: string) => Promise<void>
 }
 
 function ProjectCard({
@@ -1765,7 +1968,8 @@ function ProjectCard({
   onStartEdit,
   onSaveEdit,
   onCancelEdit,
-  onDelete
+  onDelete,
+  onRemoveSite
 }: ProjectCardProps) {
   const [editingDescription, setEditingDescription] = useState(false)
   const [editDescriptionValue, setEditDescriptionValue] = useState(project.description || "")
@@ -1810,17 +2014,20 @@ function ProjectCard({
       }}
       onClick={onToggle}>
       
-      {/* Project Header */}
-      <div className="flex items-center justify-between gap-2 mb-2">
+      {/* Project Header - Compact Layout */}
+      <div className="flex items-start gap-3 mb-3">
+        <Folder className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: '#0074FB' }} />
+        
         <div className="flex-1 min-w-0">
-          {isEditing ? (
-            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-              <Folder className="h-4 w-4 flex-shrink-0" style={{ color: '#0074FB' }} />
+          {/* Title Row */}
+          <div className="flex items-center gap-2 mb-1">
+            {isEditing ? (
               <input
                 type="text"
                 value={editName}
                 onChange={(e) => onEditNameChange(e.target.value)}
-                className="flex-1 min-w-0 px-2 py-1 text-sm font-semibold rounded border"
+                onClick={(e) => e.stopPropagation()}
+                className="flex-1 min-w-0 px-2 py-1 text-base font-semibold rounded border"
                 style={{ 
                   color: 'var(--dark)', 
                   fontFamily: "'Breeze Sans'",
@@ -1828,18 +2035,81 @@ function ProjectCard({
                 }}
                 autoFocus
               />
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 min-w-0">
-              <Folder className="h-4 w-4 flex-shrink-0" style={{ color: '#0074FB' }} />
-              <h3 className="text-sm font-semibold truncate" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+            ) : (
+              <h3 className="text-base font-semibold flex-1 min-w-0" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
                 {project.name}
               </h3>
+            )}
+            
+            {/* Auto-detected Badge */}
+            {!isEditing && project.autoDetected && (
+              <span
+                className="px-2 py-0.5 rounded text-2xs font-medium whitespace-nowrap flex-shrink-0"
+                style={{ 
+                  backgroundColor: '#F3E8FF', 
+                  color: '#6B21A8',
+                  fontSize: '10px',
+                  fontFamily: "'Breeze Sans'"
+                }}>
+                auto
+              </span>
+            )}
+          </div>
+          
+          {/* Metadata Row */}
+          <div className="flex flex-wrap items-center gap-3 text-xs mb-2" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
+            <div className="flex items-center gap-1">
+              <Calendar className="h-3 w-3" />
+              <span>{duration} day{duration === 1 ? '' : 's'}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              <span>{project.sessionIds.length} session{project.sessionIds.length === 1 ? '' : 's'}</span>
+            </div>
+            {project.sites && project.sites.length > 0 && (
+              <div className="flex items-center gap-1">
+                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+                <span>{project.sites.length} site{project.sites.length === 1 ? '' : 's'}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Keywords */}
+          {project.keywords.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {project.keywords.slice(0, 5).map((keyword, idx) => (
+                <span
+                  key={idx}
+                  className="px-2 py-0.5 rounded text-2xs"
+                  style={{ 
+                    backgroundColor: '#E8E8E8', 
+                    color: '#555',
+                    fontSize: '10px',
+                    fontFamily: "'Breeze Sans'"
+                  }}>
+                  {keyword}
+                </span>
+              ))}
+              {project.keywords.length > 5 && (
+                <span
+                  className="px-2 py-0.5 rounded text-2xs"
+                  style={{ 
+                    backgroundColor: '#E8E8E8', 
+                    color: '#555',
+                    fontSize: '10px',
+                    fontFamily: "'Breeze Sans'"
+                  }}>
+                  +{project.keywords.length - 5}
+                </span>
+              )}
             </div>
           )}
         </div>
-        
-        <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+
+        {/* Actions Column */}
+        <div className="flex flex-col gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           {isEditing ? (
             <>
               <button
@@ -1857,38 +2127,21 @@ function ProjectCard({
             </>
           ) : (
             <>
-              {/* Auto-detected Badge */}
-              {project.autoDetected && (
-                <span
-                  className="px-2 py-0.5 rounded text-2xs font-medium whitespace-nowrap"
-                  style={{ 
-                    backgroundColor: '#F3E8FF', 
-                    color: '#6B21A8',
-                    fontSize: '10px',
-                    fontFamily: "'Breeze Sans'"
-                  }}>
-                  auto
-                </span>
-              )}
-              
-              {/* Edit Button */}
               <button
                 onClick={(e) => {
                   e.stopPropagation()
                   onStartEdit()
                 }}
-                className="hover:bg-gray-200 rounded p-1 transition-colors"
+                className="hover:bg-gray-200 rounded p-1.5 transition-colors"
                 title="Edit project">
-                <Edit2 className="h-3.5 w-3.5" style={{ color: '#9A9FA6' }} />
+                <Edit2 className="h-4 w-4" style={{ color: '#9A9FA6' }} />
               </button>
               
-              {/* Open All Sites as Tab Group */}
               {project.sites && project.sites.length > 0 && (
                 <button
                   onClick={async (e) => {
                     e.stopPropagation()
                     
-                    // Open all sites in new tabs
                     const tabIds: number[] = []
                     for (const site of project.sites) {
                       const url = site.url.startsWith('http') ? site.url : `https://${site.url}`
@@ -1896,7 +2149,6 @@ function ProjectCard({
                       if (tab.id) tabIds.push(tab.id)
                     }
                     
-                    // Create a tab group with the project name
                     if (tabIds.length > 0) {
                       const groupId = await chrome.tabs.group({ tabIds })
                       chrome.tabGroups.update(groupId, {
@@ -1907,79 +2159,27 @@ function ProjectCard({
                       })
                     }
                   }}
-                  className="hover:bg-gray-200 rounded p-1 transition-colors"
-                  title="Open all sites in a tab group">
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: '#9A9FA6' }}>
+                  className="hover:bg-gray-200 rounded p-1.5 transition-colors"
+                  title="Open all sites">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: '#9A9FA6' }}>
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                   </svg>
                 </button>
               )}
               
-              {/* Delete Button */}
               <button
                 onClick={(e) => {
                   e.stopPropagation()
                   onDelete()
                 }}
-                className="hover:bg-red-100 rounded p-1 transition-colors"
+                className="hover:bg-red-100 rounded p-1.5 transition-colors"
                 title="Delete project">
-                <Trash2 className="h-3.5 w-3.5" style={{ color: '#9A9FA6' }} />
+                <Trash2 className="h-4 w-4" style={{ color: '#9A9FA6' }} />
               </button>
             </>
           )}
         </div>
       </div>
-
-      {/* Project Metadata */}
-      <div className="flex flex-wrap items-center gap-3 text-xs mb-2" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
-        <div className="flex items-center gap-1">
-          <Calendar className="h-3 w-3" />
-          <span>{duration} day{duration === 1 ? '' : 's'} • {startDateStr} - {endDateStr}</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <Clock className="h-3 w-3" />
-          <span>{project.sessionIds.length} session{project.sessionIds.length === 1 ? '' : 's'}</span>
-        </div>
-      </div>
-
-      {/* Keywords */}
-      {project.keywords.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-2">
-          {project.keywords.slice(0, 5).map((keyword, idx) => (
-            <span
-              key={idx}
-              className="px-2 py-0.5 rounded text-2xs"
-              style={{ 
-                backgroundColor: '#E8E8E8', 
-                color: '#555',
-                fontSize: '10px',
-                fontFamily: "'Breeze Sans'"
-              }}>
-              {keyword}
-            </span>
-          ))}
-          {project.keywords.length > 5 && (
-            <span
-              className="px-2 py-0.5 rounded text-2xs"
-              style={{ 
-                backgroundColor: '#E8E8E8', 
-                color: '#555',
-                fontSize: '10px',
-                fontFamily: "'Breeze Sans'"
-              }}>
-              +{project.keywords.length - 5}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Top Domains */}
-      {project.topDomains.length > 0 && (
-        <div className="flex items-center gap-2 text-2xs mb-2" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
-          <Tag className="h-3 w-3" />
-          <span>{project.topDomains.slice(0, 3).join(', ')}</span>
-        </div>
-      )}
 
       {/* Description */}
       {editingDescription ? (
@@ -2044,23 +2244,7 @@ function ProjectCard({
         </button>
       )}
 
-      {/* Confidence Score */}
-      {project.autoDetected && (
-        <div className="flex items-center gap-2 mb-2">
-          <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#E5E5E5' }}>
-            <div
-              className="h-full transition-all"
-              style={{ 
-                width: `${project.score}%`,
-                backgroundColor: project.score >= 70 ? '#2E7D32' : project.score >= 50 ? '#E65100' : '#9A9FA6'
-              }}
-            />
-          </div>
-          <span className="text-2xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
-            {project.score}% confidence
-          </span>
-        </div>
-      )}
+
 
       {/* Sites List (shown when expanded) */}
       {isExpanded && project.sites && project.sites.length > 0 && (
@@ -2092,15 +2276,17 @@ function ProjectCard({
               return (
                 <div
                   key={`${site.url}-${index}`}
-                  className="flex items-start gap-2 p-2 rounded hover:bg-gray-50 transition-colors cursor-pointer"
+                  className="flex items-start gap-2 p-2 rounded hover:bg-gray-50 transition-colors group"
                   style={{ backgroundColor: '#FAFAFA', border: '1px solid #E5E5E5' }}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    const fullUrl = site.url.startsWith('http') ? site.url : `https://${site.url}`
-                    chrome.tabs.create({ url: fullUrl })
-                  }}
-                  title={`Open ${site.url}`}>
-                  <div className="flex-1 min-w-0">
+                  onClick={(e) => e.stopPropagation()}>
+                  <div 
+                    className="flex-1 min-w-0 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      const fullUrl = site.url.startsWith('http') ? site.url : `https://${site.url}`
+                      chrome.tabs.create({ url: fullUrl })
+                    }}
+                    title={`Open ${site.url}`}>
                     <p className="text-xs truncate mb-0.5" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'", fontWeight: 500 }}>
                       {site.title}
                     </p>
@@ -2116,9 +2302,35 @@ function ProjectCard({
                       )}
                     </p>
                   </div>
-                  <svg className="h-3 w-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: '#9A9FA6' }}>
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const fullUrl = site.url.startsWith('http') ? site.url : `https://${site.url}`
+                        chrome.tabs.create({ url: fullUrl })
+                      }}
+                      className="p-1 hover:bg-gray-200 rounded opacity-0 group-hover:opacity-100 transition-all"
+                      title="Open site">
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: '#9A9FA6' }}>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </button>
+                    {onRemoveSite && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (window.confirm(`Remove ${site.title} from this project?`)) {
+                            onRemoveSite(site.url)
+                          }
+                        }}
+                        className="p-1 hover:bg-red-100 rounded opacity-0 group-hover:opacity-100 transition-all"
+                        title="Remove site">
+                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: '#EF4444' }}>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                 </div>
               )
             })}

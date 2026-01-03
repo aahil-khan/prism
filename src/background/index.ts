@@ -268,6 +268,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
+  if (message.type === "ADD_PROJECT") {
+    const { name, description, sessionIds = [], sites = [], autoDetected = false } = message.payload
+    const now = Date.now()
+    
+    addProject({
+      name,
+      description,
+      startDate: now,
+      endDate: now,
+      sessionIds,
+      keywords: [],
+      topDomains: [],
+      sites,
+      status: 'active',
+      autoDetected,
+      score: autoDetected ? 0 : 100
+    })
+      .then((newProject) => {
+        console.log("[ADD_PROJECT] Created new project:", newProject.name)
+        sendResponse({ success: true, project: newProject })
+      })
+      .catch((error) => {
+        console.error("ADD_PROJECT failed:", error)
+        sendResponse({ success: false, error: error.message })
+      })
+    return true
+  }
+
   if (message.type === "UPDATE_PROJECT") {
     const { projectId, updates } = message.payload
     updateProject(projectId, updates)
