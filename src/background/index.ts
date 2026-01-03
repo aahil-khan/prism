@@ -55,6 +55,15 @@ import {
   exportBlocklist
 } from "./blocklistStore"
 import type { BlocklistEntry, BlocklistCategory } from "~/types/focus-mode"
+import {
+  scheduleReminder,
+  cancelReminder,
+  snoozeReminder,
+  dismissReminder,
+  reregisterAllReminders,
+  openProjectInTabGroup,
+  handleReminderAlarm
+} from "./reminderManager"
 
 // Track registered session listeners (sidepanel tabs)
 const sessionListeners = new Set<number>()
@@ -77,6 +86,21 @@ loadLearnedAssociations().then(() => {
 // Initialize focus mode on startup
 initializeFocusMode().then(() => {
   console.log("[Background] Focus mode initialized")
+})
+
+// Initialize reminder alarms on startup
+reregisterAllReminders().then(() => {
+  console.log("[Background] Reminder alarms reregistered")
+}).catch((error) => {
+  console.error("[Background] Failed to reregister reminders:", error)
+})
+
+// Listen for alarm triggers
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name.startsWith("project-reminder-")) {
+    console.log("[Background] Alarm triggered:", alarm.name)
+    handleReminderAlarm(alarm)
+  }
 })
 
 // Initialize all listeners
@@ -721,6 +745,115 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch((error) => {
         console.error("EXPORT_BLOCKLIST failed:", error)
         sendResponse({ error: error.message })
+      })
+    return true
+  }
+
+  // Project reminder operations
+  if (message.type === "SET_PROJECT_REMINDER") {
+    const { projectId, reminder } = message.payload
+    console.log("[SET_PROJECT_REMINDER]", { projectId, reminder })
+    
+    scheduleReminder(projectId, reminder)
+      .then(() => {
+        sendResponse({ success: true })
+      })
+      .catch((error) => {
+        console.error("SET_PROJECT_REMINDER failed:", error)
+        sendResponse({ success: false, error: error.message })
+      })
+    return true
+  }
+
+  if (message.type === "CANCEL_PROJECT_REMINDER") {
+    const { projectId } = message.payload
+    console.log("[CANCEL_PROJECT_REMINDER]", { projectId })
+    
+    cancelReminder(projectId)
+      .then(() => {
+        sendResponse({ success: true })
+      })
+      .catch((error) => {
+        console.error("CANCEL_PROJECT_REMINDER failed:", error)
+        sendResponse({ success: false, error: error.message })
+      })
+    return true
+  }
+
+  if (message.type === "SNOOZE_REMINDER") {
+    const { projectId } = message.payload
+    console.log("[SNOOZE_REMINDER]", { projectId })
+    
+    snoozeReminder(projectId)
+      .then(() => {
+        sendResponse({ success: true })
+      })
+      .catch((error) => {
+        console.error("SNOOZE_REMINDER failed:", error)
+        sendResponse({ success: false, error: error.message })
+      })
+    return true
+  }
+
+  if (message.type === "DISMISS_REMINDER") {
+    const { projectId } = message.payload
+    console.log("[DISMISS_REMINDER]", { projectId })
+    
+    dismissReminder(projectId)
+      .then(() => {
+        sendResponse({ success: true })
+      })
+      .catch((error) => {
+        console.error("DISMISS_REMINDER failed:", error)
+        sendResponse({ success: false, error: error.message })
+      })
+    return true
+  }
+
+  if (message.type === "DISMISS_SNOOZE") {
+    const { projectId } = message.payload
+    console.log("[DISMISS_SNOOZE]", { projectId })
+    
+    loadProjects()
+      .then(async (projects) => {
+        const project = projects.find(p => p.id === projectId)
+        if (!project || !project.reminder) {
+          sendResponse({ success: false, error: "Project or reminder not found" })
+          return
+        }
+        
+        // Clear snooze state
+        project.reminder.snoozeCount = 0
+        project.reminder.snoozedUntil = undefined
+        
+        // Save updated project
+        const otherProjects = projects.filter(p => p.id !== projectId)
+        await chrome.storage.local.set({ "aegis-projects": [...otherProjects, project] })
+        
+        // Reschedule alarm immediately
+        await scheduleReminder(projectId, project.reminder)
+        
+        console.log("[DISMISS_SNOOZE] Snooze dismissed, reminder rescheduled for project:", projectId)
+        sendResponse({ success: true })
+      })
+      .catch((error) => {
+        console.error("DISMISS_SNOOZE failed:", error)
+        sendResponse({ success: false, error: error.message })
+      })
+    return true
+  }
+
+  if (message.type === "OPEN_PROJECT_IN_TAB_GROUP") {
+    const { projectId } = message.payload
+    console.log("[OPEN_PROJECT_IN_TAB_GROUP]", { projectId })
+    
+    openProjectInTabGroup(projectId)
+      .then(() => {
+        sendResponse({ success: true })
+      })
+      .catch((error) => {
+        console.error("OPEN_PROJECT_IN_TAB_GROUP failed:", error)
+        sendResponse({ success: false, error: error.message })
       })
     return true
   }

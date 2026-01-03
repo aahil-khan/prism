@@ -107,6 +107,9 @@ export const setupPageVisitListener = () => {
             if (candidate) {
               console.log("[ProjectDetection] Candidate ready to notify:", candidate)
               
+              // Mark as notified FIRST before sending message (to prevent duplicates)
+              await markCandidateNotified(candidate.id, currentSessionId)
+              
               // Send notification to content script (will show subtle banner)
               if (tabId) {
                 chrome.tabs.sendMessage(tabId, {
@@ -120,9 +123,6 @@ export const setupPageVisitListener = () => {
                     scoreBreakdown: candidate.scoreBreakdown,
                     sessionId: currentSessionId
                   }
-                }).then(() => {
-                  // Record notification in history
-                  markCandidateNotified(candidate.id, currentSessionId)
                 }).catch((err) => {
                   console.log("[CandidateDetector] Could not send notification to tab:", err)
                 })
@@ -131,20 +131,24 @@ export const setupPageVisitListener = () => {
             
             // Also check for project suggestions (add to existing project)
             const suggestion = await checkForProjectSuggestion(baseEvent, baseEvent.url)
-            if (suggestion && tabId) {
-              console.log("[ProjectSuggestion] Found match:", suggestion.project.name, "score:", suggestion.score)
-              chrome.tabs.sendMessage(tabId, {
-                type: "PROJECT_SUGGESTION_READY",
-                payload: {
-                  projectId: suggestion.project.id,
-                  projectName: suggestion.project.name,
-                  currentUrl: baseEvent.url,
-                  currentTitle: baseEvent.title,
-                  score: suggestion.score
-                }
-              }).catch((err) => {
-                console.log("[ProjectSuggestion] Could not send notification:", err)
-              })
+            if (suggestion) {
+              console.log("[ProjectSuggestion] ✅ Suggestion valid, sending notification:", suggestion.project.name, "score:", suggestion.score)
+              if (tabId) {
+                chrome.tabs.sendMessage(tabId, {
+                  type: "PROJECT_SUGGESTION_READY",
+                  payload: {
+                    projectId: suggestion.project.id,
+                    projectName: suggestion.project.name,
+                    currentUrl: baseEvent.url,
+                    currentTitle: baseEvent.title,
+                    score: suggestion.score
+                  }
+                }).catch((err) => {
+                  console.log("[ProjectSuggestion] Could not send notification:", err)
+                })
+              }
+            } else {
+              console.log("[ProjectSuggestion] ⚠️ No valid suggestion (already in project or dismissed)")
             }
           }
         } catch (error) {

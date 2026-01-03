@@ -18,6 +18,17 @@ export type ProjectSite = {
   visitCount: number // Number of visits to this site within project sessions
 }
 
+export type ProjectReminder = {
+  enabled: boolean // Whether reminder is active
+  type: 'daily' | 'once' | 'weekly' // Schedule type
+  time: string // Time in HH:MM format (24-hour, local timezone)
+  date?: string // For 'once' type: YYYY-MM-DD format
+  daysOfWeek?: number[] // For 'weekly' type: [0=Sun, 1=Mon, ..., 6=Sat]
+  snoozeCount: number // Current snooze count (max 3)
+  snoozedUntil?: number // Timestamp when snoozed until
+  lastTriggered?: number // Last time reminder naturally triggered (not from snooze)
+}
+
 export type Project = {
   id: string
   name: string // Auto-generated or user-edited
@@ -36,4 +47,5 @@ export type Project = {
     url: string // URL that was dismissed
     timestamp: number // When it was dismissed
   }> // Track URLs user has dismissed from suggestions
+  reminder?: ProjectReminder // Optional reminder settings
 }

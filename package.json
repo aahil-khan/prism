@@ -49,6 +49,7 @@
       "sidePanel",
       "storage",
       "notifications",
+      "alarms",
       "declarativeNetRequest",
       "declarativeNetRequestFeedback"
     ],

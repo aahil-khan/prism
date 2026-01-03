@@ -1,4 +1,4 @@
-import { X, Search, ChevronDown, Settings, ArrowLeft, ExternalLink, MoreVertical, ExternalLinkIcon, Copy, Trash2, EyeOff, Folder, Calendar, Tag, Edit2, Clock } from "lucide-react"
+import { X, Search, ChevronDown, Settings, ArrowLeft, ExternalLink, MoreVertical, ExternalLinkIcon, Copy, Trash2, EyeOff, Folder, Calendar, Tag, Edit2, Clock, Bell, BellOff, Check } from "lucide-react"
 import { useEffect, useMemo, useState, useRef } from "react"
 import type { PageEvent } from "~/types/page-event"
 import type { Session } from "~/types/session"
@@ -1973,6 +1973,14 @@ function ProjectCard({
 }: ProjectCardProps) {
   const [editingDescription, setEditingDescription] = useState(false)
   const [editDescriptionValue, setEditDescriptionValue] = useState(project.description || "")
+  const [showReminderDialog, setShowReminderDialog] = useState(false)
+  const [reminderForm, setReminderForm] = useState({
+    enabled: project.reminder?.enabled || false,
+    type: project.reminder?.type || 'daily' as 'daily' | 'once' | 'weekly',
+    time: project.reminder?.time || '09:00',
+    date: project.reminder?.date || new Date().toISOString().split('T')[0],
+    daysOfWeek: project.reminder?.daysOfWeek || [1, 2, 3, 4, 5] // Mon-Fri by default
+  })
 
   const duration = Math.ceil((project.endDate - project.startDate) / (1000 * 60 * 60 * 24))
   const startDateStr = new Date(project.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -2003,6 +2011,46 @@ function ProjectCard({
   const handleCancelDescription = () => {
     setEditDescriptionValue(project.description || "")
     setEditingDescription(false)
+  }
+
+  const handleSaveReminder = async () => {
+    const reminder = {
+      enabled: reminderForm.enabled,
+      type: reminderForm.type,
+      time: reminderForm.time,
+      date: reminderForm.type === 'once' ? reminderForm.date : undefined,
+      daysOfWeek: reminderForm.type === 'weekly' ? reminderForm.daysOfWeek : undefined,
+      snoozeCount: 0,
+      snoozedUntil: undefined,
+      lastTriggered: undefined
+    }
+    
+    // Update project with reminder
+    const updatedProject = {
+      ...project,
+      reminder
+    }
+    
+    // Get all projects and replace the current one
+    const projects = await chrome.storage.local.get("aegis-projects")
+    const allProjects = projects["aegis-projects"] || []
+    const updatedProjects = allProjects.map((p: any) => 
+      p.id === project.id ? updatedProject : p
+    )
+    
+    // Save back to storage
+    await chrome.storage.local.set({ "aegis-projects": updatedProjects })
+    
+    // Schedule/cancel reminder in background
+    await chrome.runtime.sendMessage({
+      type: reminder.enabled ? "SET_PROJECT_REMINDER" : "CANCEL_PROJECT_REMINDER",
+      payload: {
+        projectId: project.id,
+        reminder
+      }
+    })
+    
+    setShowReminderDialog(false)
   }
 
   return (
@@ -2075,6 +2123,31 @@ function ProjectCard({
               </div>
             )}
           </div>
+
+          {/* Snooze State Indicator */}
+          {project.reminder?.snoozedUntil && Date.now() < project.reminder.snoozedUntil && (
+            <div className="mb-2 p-2 rounded flex items-center justify-between" style={{ backgroundColor: 'rgba(255, 193, 7, 0.1)', border: '1px solid rgba(255, 193, 7, 0.3)' }}>
+              <div className="flex items-center gap-2 flex-1" style={{ fontSize: '12px', fontFamily: "'Breeze Sans'" }}>
+                <Clock className="h-4 w-4" style={{ color: '#FFC107' }} />
+                <span style={{ color: '#FF8C00' }}>
+                  ⏸️ Snoozed for {Math.ceil((project.reminder.snoozedUntil - Date.now()) / 1000 / 60)} min
+                </span>
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  // Dismiss snooze by clearing the flag and resetting count
+                  chrome.runtime.sendMessage({
+                    type: "DISMISS_SNOOZE",
+                    payload: { projectId: project.id }
+                  }).catch(err => console.error("Failed to dismiss snooze:", err))
+                }}
+                className="px-2 py-1 rounded text-xs font-medium flex-shrink-0"
+                style={{ backgroundColor: '#FFC107', color: '#000' }}>
+                Dismiss
+              </button>
+            </div>
+          )}
 
           {/* Keywords */}
           {project.keywords.length > 0 && (
@@ -2166,6 +2239,20 @@ function ProjectCard({
                   </svg>
                 </button>
               )}
+              
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowReminderDialog(true)
+                }}
+                className="hover:bg-gray-200 rounded p-1.5 transition-colors relative"
+                title={project.reminder?.enabled ? "Reminder active" : "Set reminder"}>
+                {project.reminder?.enabled ? (
+                  <Bell className="h-4 w-4" style={{ color: '#0074FB' }} />
+                ) : (
+                  <BellOff className="h-4 w-4" style={{ color: '#9A9FA6' }} />
+                )}
+              </button>
               
               <button
                 onClick={(e) => {
@@ -2361,6 +2448,147 @@ function ProjectCard({
           style={{ color: '#9A9FA6' }}
         />
       </button>
+
+      {/* Reminder Dialog */}
+      {showReminderDialog && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          style={{ zIndex: 9999 }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowReminderDialog(false)
+            }
+          }}>
+          <div
+            className="bg-white rounded-xl p-6 max-w-md w-full mx-4"
+            onClick={(e) => e.stopPropagation()}
+            style={{ border: '1px solid #E5E5E5', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+                Set Reminder
+              </h3>
+              <button
+                onClick={() => setShowReminderDialog(false)}
+                className="p-1 hover:bg-gray-100 rounded transition-colors">
+                <X className="h-5 w-5" style={{ color: '#9A9FA6' }} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Enable Toggle */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+                  Enable Reminder
+                </span>
+                <button
+                  onClick={() => setReminderForm({ ...reminderForm, enabled: !reminderForm.enabled })}
+                  className={`w-12 h-6 rounded-full transition-colors relative ${reminderForm.enabled ? 'bg-blue-600' : 'bg-gray-300'}`}>
+                  <div
+                    className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${reminderForm.enabled ? 'translate-x-7' : 'translate-x-1'}`}
+                  />
+                </button>
+              </div>
+
+              {reminderForm.enabled && (
+                <>
+                  {/* Schedule Type */}
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+                      Schedule
+                    </label>
+                    <div className="flex gap-2">
+                      {(['daily', 'once', 'weekly'] as const).map((type) => (
+                        <button
+                          key={type}
+                          onClick={() => setReminderForm({ ...reminderForm, type })}
+                          className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${reminderForm.type === type ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                          style={{ fontFamily: "'Breeze Sans'" }}>
+                          {type.charAt(0).toUpperCase() + type.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Time Picker */}
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+                      Time
+                    </label>
+                    <input
+                      type="time"
+                      value={reminderForm.time}
+                      onChange={(e) => setReminderForm({ ...reminderForm, time: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg border text-sm"
+                      style={{ borderColor: '#E5E5E5', fontFamily: "'Breeze Sans'" }}
+                    />
+                  </div>
+
+                  {/* Date Picker (for once) */}
+                  {reminderForm.type === 'once' && (
+                    <div>
+                      <label className="block text-sm font-medium mb-2" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+                        Date
+                      </label>
+                      <input
+                        type="date"
+                        value={reminderForm.date}
+                        onChange={(e) => setReminderForm({ ...reminderForm, date: e.target.value })}
+                        min={new Date().toISOString().split('T')[0]}
+                        className="w-full px-3 py-2 rounded-lg border text-sm"
+                        style={{ borderColor: '#E5E5E5', fontFamily: "'Breeze Sans'" }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Days of Week (for weekly) */}
+                  {reminderForm.type === 'weekly' && (
+                    <div>
+                      <label className="block text-sm font-medium mb-2" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+                        Days of Week
+                      </label>
+                      <div className="flex gap-2">
+                        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => {
+                          const isSelected = reminderForm.daysOfWeek.includes(index)
+                          return (
+                            <button
+                              key={index}
+                              onClick={() => {
+                                const newDays = isSelected
+                                  ? reminderForm.daysOfWeek.filter(d => d !== index)
+                                  : [...reminderForm.daysOfWeek, index].sort((a, b) => a - b)
+                                setReminderForm({ ...reminderForm, daysOfWeek: newDays })
+                              }}
+                              className={`flex-1 w-8 h-8 rounded-full text-xs font-medium transition-colors ${isSelected ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                              style={{ fontFamily: "'Breeze Sans'" }}>
+                              {day}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => setShowReminderDialog(false)}
+                  className="flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                  style={{ backgroundColor: '#E5E5E5', color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveReminder}
+                  className="flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                  style={{ backgroundColor: '#0074FB', color: 'white', fontFamily: "'Breeze Sans'" }}>
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
