@@ -315,3 +315,38 @@ export async function updateSessionLabel(sessionId: string, labelId: string | un
     console.error("Failed to persist session label update:", error)
   }
 }
+
+/**
+ * Delete a page from a session
+ */
+export async function deletePageFromSession(sessionId: string, pageUrl: string): Promise<void> {
+  const session = sessions.find((s) => s.id === sessionId)
+  if (!session) return
+
+  // Remove the page from the session
+  session.pages = session.pages.filter((page) => page.url !== pageUrl)
+
+  // If session is now empty, remove the entire session
+  if (session.pages.length === 0) {
+    sessions = sessions.filter((s) => s.id !== sessionId)
+  }
+
+  try {
+    await saveSessions(sessions)
+  } catch (error) {
+    console.error("Failed to persist session after deleting page:", error)
+  }
+}
+
+/**
+ * Delete an entire session
+ */
+export async function deleteSession(sessionId: string): Promise<void> {
+  sessions = sessions.filter((s) => s.id !== sessionId)
+
+  try {
+    await saveSessions(sessions)
+  } catch (error) {
+    console.error("Failed to persist session deletion:", error)
+  }
+}

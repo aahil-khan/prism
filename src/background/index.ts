@@ -6,7 +6,7 @@ import {
   setupOpenSidepanelListener
 } from "./sidepanel-listeners"
 import { setupConsentListener } from "./consent-listener"
-import { getSessions, initializeSessions, updateSessionLabel } from "./sessionManager"
+import { getSessions, initializeSessions, updateSessionLabel, deletePageFromSession, deleteSession } from "./sessionManager"
 import { executeSearch } from "./search-coordinator"
 import { loadLabels, addLabel, deleteLabel, getLabelById } from "./labelsStore"
 import { loadLearnedAssociations, learnFromSession } from "./contextLearning"
@@ -211,6 +211,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       })
       .catch((error) => {
         console.error("DELETE_LABEL failed:", error)
+        sendResponse({ success: false })
+      })
+    return true
+  }
+
+  if (message.type === "DELETE_PAGE_FROM_SESSION") {
+    const { sessionId, pageUrl } = message.payload
+    deletePageFromSession(sessionId, pageUrl)
+      .then(() => {
+        sendResponse({ success: true })
+        broadcastSessionUpdate()
+      })
+      .catch((error) => {
+        console.error("DELETE_PAGE_FROM_SESSION failed:", error)
+        sendResponse({ success: false })
+      })
+    return true
+  }
+
+  if (message.type === "DELETE_SESSION") {
+    const { sessionId } = message.payload
+    deleteSession(sessionId)
+      .then(() => {
+        sendResponse({ success: true })
+        broadcastSessionUpdate()
+      })
+      .catch((error) => {
+        console.error("DELETE_SESSION failed:", error)
         sendResponse({ success: false })
       })
     return true

@@ -189,10 +189,17 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
 
   useEffect(() => {
     // Initial load of sessions
+    let isInitialLoad = true
     const loadSessions = () => {
       sendMessage<{ sessions: Session[] }>({ type: "GET_SESSIONS" })
         .then((res) => {
-          setSessions(res?.sessions ?? [])
+          const loadedSessions = res?.sessions ?? []
+          setSessions(loadedSessions)
+          // Only expand all sessions on initial load, not on subsequent polls
+          if (isInitialLoad) {
+            setExpandedSessions(loadedSessions.map((s) => s.id))
+            isInitialLoad = false
+          }
         })
         .catch((err) => {
           console.error("Failed to load sessions:", err)
@@ -626,7 +633,7 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
                   await sendMessage({
                     type: "DELETE_PROJECT",
                     payload: { projectId }
-                  })
+                  })  
                   // Reload projects
                   const response = await sendMessage<{ projects: Project[] }>({ 
                     type: "GET_PROJECTS" 
@@ -1284,14 +1291,18 @@ function SessionItem({ session, isExpanded, onToggle, labels, onUpdateSessionLab
 
   return (
     <div 
-      onClick={onToggle}
-      className="flex flex-col gap-1.5 p-3 rounded-xl transition-all cursor-pointer"
+      className="flex flex-col gap-1.5 p-3 rounded-xl transition-all"
       style={{ 
         backgroundColor: isExpanded ? '#F5F5F5' : '#FFFFFF',
         border: '1px solid #BCBCBC'
       }}>
       {/* Session Header */}
-      <div className="flex items-center gap-2 w-full">
+      <div 
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggle()
+        }}
+        className="flex items-center gap-2 w-full cursor-pointer">
         <div className="flex items-center gap-3 flex-1">
           <p
             className="text-sm font-medium leading-tight"
@@ -1431,6 +1442,16 @@ function SessionItem({ session, isExpanded, onToggle, labels, onUpdateSessionLab
                     className="hover:bg-gray-200 rounded p-0.5 transition-colors">
                     <MoreVertical className="h-3.5 w-3.5" style={{ color: '#9A9FA6' }} />
                   </button>
+                  {/* Favicon for the page */}
+                  <img
+                    src={`https://www.google.com/s2/favicons?domain=${new URL(page.url).hostname}&sz=16`}
+                    alt=""
+                    className="w-4 h-4 rounded flex-shrink-0"
+                    onError={(e) => {
+                      const img = e.target as HTMLImageElement
+                      img.style.display = 'none'
+                    }}
+                  />
                   <a
                     href={page.url}
                     target="_blank"
@@ -1465,7 +1486,7 @@ function SessionItem({ session, isExpanded, onToggle, labels, onUpdateSessionLab
                     </button>
                     <button
                       onClick={() => {
-                        window.open(page.url, '_blank', 'noopener,noreferrer')
+                        chrome.windows.create({ url: page.url })
                         setOpenMenuIndex(null)
                       }}
                       className="w-full text-left px-4 py-2 text-xs hover:bg-gray-50 transition-colors flex items-center gap-3"
@@ -1485,10 +1506,16 @@ function SessionItem({ session, isExpanded, onToggle, labels, onUpdateSessionLab
                     </button>
                     <div className="h-px mx-2 my-1" style={{ backgroundColor: '#E5E5E5' }} />
                     <button
-                      onClick={() => {
-                        // Delete functionality would be implemented here
-                        console.log('Delete from session:', page.url)
-                        setOpenMenuIndex(null)
+                      onClick={async () => {
+                        try {
+                          await sendMessage<{ success: boolean }>({
+                            type: "DELETE_PAGE_FROM_SESSION",
+                            payload: { sessionId: session.id, pageUrl: page.url }
+                          })
+                          setOpenMenuIndex(null)
+                        } catch (err) {
+                          console.error("Failed to delete page from session:", err)
+                        }
                       }}
                       className="w-full text-left px-4 py-2 text-xs hover:bg-red-50 transition-colors flex items-center gap-3"
                       style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
