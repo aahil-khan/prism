@@ -298,7 +298,10 @@ export default function GraphFullPage() {
 
   const graphData = {
     nodes: filteredNodes.map(n => {
-      const displayLabel = n.domain
+      // Use project name in project mode, domain in semantic mode
+      const displayLabel = graphMode === 'projects' && n.projectName 
+        ? n.projectName 
+        : n.domain
       
       return {
         id: n.id,
@@ -308,6 +311,9 @@ export default function GraphFullPage() {
         cluster: n.cluster,
         visitCount: n.visitCount,
         searchQuery: n.searchQuery,
+        projectName: n.projectName,
+        description: n.description,
+        keywords: n.keywords,
         color: getClusterColor(n.cluster),
         label: displayLabel
       }
