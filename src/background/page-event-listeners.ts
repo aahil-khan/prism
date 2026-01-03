@@ -6,6 +6,33 @@ import { markGraphForRebuild, broadcastSessionUpdate } from "./index"
 import { checkPageForCandidate, markCandidateNotified } from "./candidateDetector"
 import { checkForProjectSuggestion } from "./projectSuggestions"
 
+// Extract search query from search engine URLs
+function extractSearchQuery(url: string): string | null {
+  try {
+    const urlObj = new URL(url)
+    const hostname = urlObj.hostname.toLowerCase()
+    
+    // Google Search
+    if (hostname.includes('google.com') && urlObj.pathname.includes('/search')) {
+      return urlObj.searchParams.get('q')
+    }
+    
+    // Bing Search
+    if (hostname.includes('bing.com') && urlObj.pathname.includes('/search')) {
+      return urlObj.searchParams.get('q')
+    }
+    
+    // DuckDuckGo
+    if (hostname.includes('duckduckgo.com')) {
+      return urlObj.searchParams.get('q')
+    }
+    
+    return null
+  } catch (e) {
+    return null
+  }
+}
+
 // Listen for PAGE_VISITED events from content script
 export const setupPageVisitListener = () => {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -33,13 +60,30 @@ export const setupPageVisitListener = () => {
             return null
           })()
 
-          if (existingWithEmbedding?.titleEmbedding) {
-            baseEvent.titleEmbedding = existingWithEmbedding.titleEmbedding
-          } else {
-            const titleEmbedding = await generateEmbedding(baseEvent.title)
+          // Extract search query if this is a search engine result page
+          const searchQuery = extractSearchQuery(baseEvent.url)
+          if (searchQuery) {
+            baseEvent.searchQuery = searchQuery
+          }
+
+          // For search URLs, skip cache and regenerate embedding with search query
+          // For other URLs, reuse existing embedding if available
+          if (searchQuery) {
+            // Always generate fresh embedding for search queries
+            const titleEmbedding = await generateEmbedding(searchQuery)
             if (titleEmbedding) {
               baseEvent.titleEmbedding = titleEmbedding
-              console.log("[PageEvent] Embedding generated for title:", baseEvent.title)
+              console.log("[PageEvent] Embedding generated for search query:", searchQuery)
+            }
+          } else if (existingWithEmbedding?.titleEmbedding) {
+            baseEvent.titleEmbedding = existingWithEmbedding.titleEmbedding
+          } else {
+            // Use search query for embedding if available, otherwise use title
+            const textForEmbedding = searchQuery || baseEvent.title
+            const titleEmbedding = await generateEmbedding(textForEmbedding)
+            if (titleEmbedding) {
+              baseEvent.titleEmbedding = titleEmbedding
+              console.log("[PageEvent] Embedding generated for:", searchQuery ? `search query "${searchQuery}"` : `title "${baseEvent.title}"`)
             }
           }
 

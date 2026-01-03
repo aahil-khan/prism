@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from "react"
 import ForceGraph2D from "react-force-graph-2d"
-import { Search, X, ChevronDown, RotateCw, Sliders, ZoomIn, ZoomOut } from "lucide-react"
+import { Search, X, ChevronDown, RotateCw, Sliders, ZoomIn, ZoomOut, Link, Maximize2 } from "lucide-react"
 import type { KnowledgeGraph, GraphNode } from "~/lib/knowledge-graph"
-import { getClusterColor } from "~/lib/knowledge-graph"
+import { getClusterColor, generateClusterLabel } from "~/lib/knowledge-graph"
 
 function sendMessage<T>(message: any): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -20,16 +20,34 @@ function sendMessage<T>(message: any): Promise<T> {
 export function GraphPanel() {
   const [graph, setGraph] = useState<KnowledgeGraph | null>(null)
   const [loading, setLoading] = useState(true)
-  const [minSimilarity, setMinSimilarity] = useState(0.35)
+  const [minSimilarity, setMinSimilarity] = useState(0.50)
   const [selectedClusters, setSelectedClusters] = useState<Set<number>>(new Set())
   const [searchQuery, setSearchQuery] = useState("")
   const [timeFilter, setTimeFilter] = useState<"all" | "today" | "week">("all")
   const [showFilters, setShowFilters] = useState(false)
+  const [showLabels, setShowLabels] = useState(true)
+  const [manualLinkMode, setManualLinkMode] = useState(false)
+  const [selectedNodesForLink, setSelectedNodesForLink] = useState<string[]>([])
+  const [manualLinks, setManualLinks] = useState<Array<{source: string, target: string}>>([])
   const graphRef = useRef<any>()
   const containerRef = useRef<HTMLDivElement>(null)
   const [dimensions, setDimensions] = useState({ width: 500, height: 400 })
   const hasUserInteractedRef = useRef(false)
   const lastGraphTimestampRef = useRef<number>(0)
+
+  // Load manual links from storage
+  useEffect(() => {
+    chrome.storage.local.get(['manualLinks'], (result) => {
+      if (result.manualLinks) {
+        setManualLinks(result.manualLinks)
+      }
+    })
+  }, [])
+
+  const saveManualLinks = (links: Array<{source: string, target: string}>) => {
+    chrome.storage.local.set({ manualLinks: links })
+    setManualLinks(links)
+  }
 
   const loadGraph = useCallback(async () => {
     setLoading(true)
@@ -140,7 +158,14 @@ export function GraphPanel() {
       if (!hasUserInteractedRef.current && graphRef.current) {
         setTimeout(() => {
           if (graphRef.current && !hasUserInteractedRef.current) {
-            graphRef.current.zoomToFit(400, 50)
+            graphRef.current.zoomToFit(400, 80)
+            // Apply additional zoom out for better initial view
+            setTimeout(() => {
+              if (graphRef.current && !hasUserInteractedRef.current) {
+                const currentZoom = graphRef.current.zoom()
+                graphRef.current.zoom(currentZoom * 0.7, 200)
+              }
+            }, 450)
           }
         }, 500)
       }
@@ -208,24 +233,21 @@ export function GraphPanel() {
       )
     : timeFilteredNodes
 
-  // Filter graph data
-  const filteredEdges = graph.edges.filter(e => 
-    e.similarity >= minSimilarity &&
-    searchFilteredNodes.some(n => n.id === e.source) &&
-    searchFilteredNodes.some(n => n.id === e.target)
-  )
-  const visibleNodeIds = new Set<string>()
-  
-  filteredEdges.forEach(e => {
-    visibleNodeIds.add(e.source)
-    visibleNodeIds.add(e.target)
-  })
-
-  // Show all nodes, including isolated ones without edges
+  // Apply cluster filter
   const filteredNodes = searchFilteredNodes.filter(n => {
     if (allClustersSelected) return true
     return selectedClusters.has(n.cluster)
   })
+
+  // Create set of filtered node IDs
+  const filteredNodeIds = new Set(filteredNodes.map(n => n.id))
+
+  // Filter edges based on cluster-filtered nodes
+  const filteredEdges = graph.edges.filter(e => 
+    e.similarity >= minSimilarity &&
+    filteredNodeIds.has(e.source) &&
+    filteredNodeIds.has(e.target)
+  )
 
   // Group nodes by cluster and find clusters with at least 2 nodes
   const nodesByCluster = new Map<number, typeof filteredNodes>()
@@ -242,35 +264,90 @@ export function GraphPanel() {
 
   // Transform to react-force-graph format
   const graphData = {
-    nodes: filteredNodes.map(n => ({
-      id: n.id,
-      name: n.title,
-      url: n.url,
-      domain: n.domain,
-      cluster: n.cluster,
-      visitCount: n.visitCount,
-      color: getClusterColor(n.cluster),
-      label: n.title.length > 25 ? n.title.substring(0, 25) + '...' : n.title
-    })),
-    links: filteredEdges
-      .filter(e => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target))
-      .map(e => ({
+    nodes: filteredNodes.map(n => {
+      // Use domain as label for clean, readable display
+      const displayLabel = n.domain
+      
+      return {
+        id: n.id,
+        name: n.title,
+        url: n.url,
+        domain: n.domain,
+        cluster: n.cluster,
+        visitCount: n.visitCount,
+        searchQuery: n.searchQuery,
+        color: getClusterColor(n.cluster),
+        label: displayLabel
+      }
+    }),
+    links: [
+      ...filteredEdges.map(e => ({
         source: e.source,
         target: e.target,
-        value: e.similarity
-      }))
+        value: e.similarity,
+        isManual: false
+      })),
+      ...manualLinks
+        .filter(link => 
+          filteredNodeIds.has(link.source) && 
+          filteredNodeIds.has(link.target)
+        )
+        .map(link => ({
+          source: link.source,
+          target: link.target,
+          value: 1,
+          isManual: true
+        }))
+    ]
   }
 
   const handleNodeClick = (node: any) => {
-    if (node.url) {
-      chrome.tabs.create({ url: node.url })
+    if (manualLinkMode) {
+      // Manual linking mode
+      if (selectedNodesForLink.includes(node.id)) {
+        // Deselect node
+        setSelectedNodesForLink(prev => prev.filter(id => id !== node.id))
+      } else if (selectedNodesForLink.length === 0) {
+        // Select first node
+        setSelectedNodesForLink([node.id])
+      } else if (selectedNodesForLink.length === 1) {
+        // Select second node and check for existing link
+        const [firstNode] = selectedNodesForLink
+        
+        // Check if manual link already exists
+        const existingLinkIndex = manualLinks.findIndex(
+          link => 
+            (link.source === firstNode && link.target === node.id) ||
+            (link.source === node.id && link.target === firstNode)
+        )
+        
+        if (existingLinkIndex !== -1) {
+          // Link exists - remove it
+          const updatedLinks = manualLinks.filter((_, idx) => idx !== existingLinkIndex)
+          saveManualLinks(updatedLinks)
+          console.log('[GraphPanel] Removed manual link between', firstNode, 'and', node.id)
+        } else {
+          // Link doesn't exist - create it
+          const newLink = { source: firstNode, target: node.id }
+          saveManualLinks([...manualLinks, newLink])
+          console.log('[GraphPanel] Created manual link between', firstNode, 'and', node.id)
+        }
+        
+        // Clear selection
+        setSelectedNodesForLink([])
+      }
+    } else {
+      // Normal mode - open URL
+      if (node.url) {
+        chrome.tabs.create({ url: node.url })
+      }
     }
   }
 
   const handleZoomIn = () => {
     if (graphRef.current) {
       const currentZoom = graphRef.current.zoom()
-      graphRef.current.zoom(currentZoom * 1.3, 400)
+      graphRef.current.zoom(currentZoom * 1.5, 300)
       hasUserInteractedRef.current = true
     }
   }
@@ -278,7 +355,20 @@ export function GraphPanel() {
   const handleZoomOut = () => {
     if (graphRef.current) {
       const currentZoom = graphRef.current.zoom()
-      graphRef.current.zoom(currentZoom / 1.3, 400)
+      graphRef.current.zoom(currentZoom / 1.5, 300)
+      hasUserInteractedRef.current = true
+    }
+  }
+
+  const handleZoomReset = () => {
+    if (graphRef.current) {
+      graphRef.current.zoomToFit(400, 80)
+      setTimeout(() => {
+        if (graphRef.current) {
+          const currentZoom = graphRef.current.zoom()
+          graphRef.current.zoom(currentZoom * 0.7, 200)
+        }
+      }, 450)
       hasUserInteractedRef.current = true
     }
   }
@@ -352,7 +442,7 @@ export function GraphPanel() {
     (searchQuery.trim() ? 1 : 0) +
     (timeFilter !== "all" ? 1 : 0) +
     (selectedClusters.size > 0 ? 1 : 0) +
-    (minSimilarity !== 0.35 ? 1 : 0)
+    (minSimilarity !== 0.50 ? 1 : 0)
 
   return (
     <div className="flex flex-col gap-0">
@@ -368,6 +458,27 @@ export function GraphPanel() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => {
+              chrome.tabs.create({ url: chrome.runtime.getURL('tabs/graph.html') })
+            }}
+            className="p-1.5 rounded-lg transition-colors hover:bg-gray-50"
+            style={{ color: '#9A9FA6' }}
+            title="Open in full page">
+            <Maximize2 className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setShowLabels(!showLabels)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-gray-50"
+            style={{ 
+              color: showLabels ? '#0072de' : '#080A0B', 
+              fontFamily: "'Breeze Sans'", 
+              border: `1px solid ${showLabels ? '#0072de' : '#E5E5E5'}`,
+              backgroundColor: showLabels ? '#eff6ff' : 'transparent'
+            }}
+            title="Toggle node labels">
+            <span>Labels</span>
+          </button>
+          <button
             onClick={() => setShowFilters(!showFilters)}
             className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-gray-50"
             style={{ color: '#080A0B', fontFamily: "'Breeze Sans'", border: '1px solid #E5E5E5' }}>
@@ -382,6 +493,22 @@ export function GraphPanel() {
             )}
           </button>
           <button
+            onClick={() => {
+              setManualLinkMode(!manualLinkMode)
+              setSelectedNodesForLink([])
+            }}
+            className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-gray-50"
+            style={{ 
+              color: manualLinkMode ? '#FFFFFF' : '#080A0B', 
+              fontFamily: "'Breeze Sans'", 
+              border: '1px solid #E5E5E5',
+              backgroundColor: manualLinkMode ? '#0072de' : 'transparent'
+            }}
+            title="Click two nodes to create a manual link">
+            <Link className="h-3.5 w-3.5" />
+            <span>Link</span>
+          </button>
+          <button
             onClick={handleRefresh}
             className="p-1.5 rounded-lg transition-colors hover:bg-gray-50"
             style={{ color: '#9A9FA6' }}>
@@ -389,6 +516,30 @@ export function GraphPanel() {
           </button>
         </div>
       </div>
+
+      {/* Manual Link Mode Banner */}
+      {manualLinkMode && (
+        <div className="px-3 py-2 bg-blue-50 border-b" style={{ borderColor: '#E5E5E5' }}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Link className="h-4 w-4" style={{ color: '#0072de' }} />
+              <span className="text-xs font-medium" style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
+                {selectedNodesForLink.length === 0 
+                  ? 'Click two nodes to link them (or unlink if already connected)' 
+                  : 'Click second node to toggle link'}
+              </span>
+            </div>
+            {selectedNodesForLink.length > 0 && (
+              <button
+                onClick={() => setSelectedNodesForLink([])}
+                className="text-xs px-2 py-1 rounded hover:bg-blue-100"
+                style={{ color: '#0072de', fontFamily: "'Breeze Sans'" }}>
+                Cancel
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Always Visible Search Bar */}
       <div className="px-3 py-2 border-b bg-white" style={{ borderColor: '#E5E5E5' }}>
@@ -477,6 +628,7 @@ export function GraphPanel() {
               <div className="flex-1 flex flex-wrap gap-1.5">
                 {clusters.map(clusterId => {
                   const isActive = allClustersSelected || selectedClusters.has(clusterId)
+                  const clusterLabel = generateClusterLabel(graph.nodes, clusterId)
                   return (
                     <button
                       key={clusterId}
@@ -488,7 +640,7 @@ export function GraphPanel() {
                         border: `1px solid ${isActive ? getClusterColor(clusterId) : '#E5E5E5'}`,
                         fontFamily: "'Breeze Sans'"
                       }}>
-                      {clusterId}
+                      {clusterLabel}
                     </button>
                   )
                 })}
@@ -509,20 +661,27 @@ export function GraphPanel() {
       {/* Graph Container */}
       <div ref={containerRef} className="relative bg-white overflow-hidden" style={{ height: "400px", width: "100%" }}>
         {/* Navigation Controls */}
-        <div className="absolute top-3 right-3 z-10 flex flex-col gap-1">
+        <div className="absolute top-3 right-3 z-10 flex flex-col gap-2">
           <button
             onClick={handleZoomIn}
-            className="p-2 rounded-lg bg-white shadow-sm transition-all hover:bg-gray-50"
-            style={{ border: '1px solid #E5E5E5' }}
-            title="Zoom in">
-            <ZoomIn className="h-4 w-4" style={{ color: '#080A0B' }} />
+            className="p-3 rounded-lg bg-white shadow-md transition-all hover:bg-gray-50 active:scale-95"
+            style={{ border: '2px solid #E5E5E5' }}
+            title="Zoom in (scroll up)">
+            <ZoomIn className="h-5 w-5" style={{ color: '#080A0B' }} />
+          </button>
+          <button
+            onClick={handleZoomReset}
+            className="p-3 rounded-lg bg-white shadow-md transition-all hover:bg-gray-50 active:scale-95"
+            style={{ border: '2px solid #E5E5E5' }}
+            title="Reset zoom">
+            <RotateCw className="h-5 w-5" style={{ color: '#080A0B' }} />
           </button>
           <button
             onClick={handleZoomOut}
-            className="p-2 rounded-lg bg-white shadow-sm transition-all hover:bg-gray-50"
-            style={{ border: '1px solid #E5E5E5' }}
-            title="Zoom out">
-            <ZoomOut className="h-4 w-4" style={{ color: '#080A0B' }} />
+            className="p-3 rounded-lg bg-white shadow-md transition-all hover:bg-gray-50 active:scale-95"
+            style={{ border: '2px solid #E5E5E5' }}
+            title="Zoom out (scroll down)">
+            <ZoomOut className="h-5 w-5" style={{ color: '#080A0B' }} />
           </button>
         </div>
 
@@ -532,54 +691,70 @@ export function GraphPanel() {
             graphData={graphData}
             width={dimensions.width}
             height={dimensions.height}
-            nodeLabel={(node: any) => `${node.name}\n${node.domain}\nVisits: ${node.visitCount}`}
+            nodeLabel={(node: any) => {
+              // Simplified tooltip: just title and visit count
+              return `${node.name}\nVisits: ${node.visitCount}`
+            }}
             nodeColor={(node: any) => node.color}
             nodeVal={(node: any) => {
               const baseSize = 4
-              const sizeFactor = Math.log(node.visitCount + 1) * 2
-              return Math.max(baseSize, Math.min(baseSize + sizeFactor, 15))
+              const sizeFactor = Math.log(node.visitCount + 1) * 3
+              return Math.max(baseSize, Math.min(baseSize + sizeFactor, 18))
             }}
-            nodeRelSize={4}
+            nodeRelSize={8}
             nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
               const label = node.label
               const fontSize = 11 / globalScale
               ctx.font = `${fontSize}px 'Breeze Sans', Sans-Serif`
               
               const size = node.__bckgDimensions ? node.__bckgDimensions[0] : 4
+              const isSelected = selectedNodesForLink.includes(node.id)
               
-              // Draw node circle
+              // Draw node circle with larger size
               ctx.beginPath()
-              ctx.arc(node.x, node.y, size, 0, 2 * Math.PI, false)
-              ctx.fillStyle = node.color
+              ctx.arc(node.x, node.y, size * 1.5, 0, 2 * Math.PI, false)
+              ctx.fillStyle = isSelected ? '#0072de' : node.color
               ctx.fill()
               
-              // Draw border
-              ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'
-              ctx.lineWidth = 0.8 / globalScale
+              // Draw border (thicker for selected nodes)
+              ctx.strokeStyle = isSelected ? '#FFFFFF' : '#ffffff'
+              ctx.lineWidth = isSelected ? 4 / globalScale : 2 / globalScale
               ctx.stroke()
               
-              // Draw label below node
-              if (globalScale > 0.6) {
+              // Draw selection ring for selected nodes
+              if (isSelected) {
+                ctx.beginPath()
+                ctx.arc(node.x, node.y, size * 2, 0, 2 * Math.PI, false)
+                ctx.strokeStyle = '#0072de'
+                ctx.lineWidth = 2 / globalScale
+                ctx.setLineDash([5 / globalScale, 5 / globalScale])
+                ctx.stroke()
+                ctx.setLineDash([])
+              }
+              
+              // Only draw labels when zoomed in enough (>1.5x) and labels are enabled
+              if (showLabels && globalScale > 1.5) {
                 ctx.textAlign = 'center'
                 ctx.textBaseline = 'top'
-                ctx.fillStyle = '#080A0B'
-                ctx.fillText(label, node.x, node.y + size + 3)
+                ctx.fillStyle = '#1f2937'
+                ctx.fillText(label, node.x, node.y + (size * 1.5) + 5)
               }
             }}
             nodeCanvasObjectMode={() => 'replace'}
-            linkWidth={(link: any) => Math.max(0.5, link.value * 1.5)}
-            linkColor={() => '#94a3b8'}
+            linkWidth={(link: any) => link.isManual ? 2 : Math.max(0.5, link.value * 1.5)}
+            linkColor={(link: any) => link.isManual ? '#0072de' : '#cbd5e1'}
+            linkLineDash={(link: any) => link.isManual ? [5, 5] : null}
             linkDirectionalParticles={0}
             onNodeClick={handleNodeClick}
             onNodeHover={null}
-            cooldownTicks={100}
+            cooldownTicks={150}
             dagMode={null}
-            d3VelocityDecay={0.3}
+            d3VelocityDecay={0.2}
             enableNodeDrag={true}
             enableZoomInteraction={true}
             enablePanInteraction={true}
             onRenderFramePre={(ctx: CanvasRenderingContext2D, globalScale: number) => {
-              drawClusterBoundaries(ctx, globalScale)
+              // Cluster boundaries disabled for cleaner view
             }}
             onEngineStop={() => {
               // Only auto-fit on initial load, not after user interactions
