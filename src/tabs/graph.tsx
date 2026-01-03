@@ -38,6 +38,39 @@ export default function GraphFullPage() {
   const lastGraphTimestampRef = useRef<number>(0)
   const [dimensions, setDimensions] = useState({ width: 1200, height: 800 })
   const faviconCache = useRef<Map<string, HTMLImageElement>>(new Map())
+  const panBoundaryTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const CONTENT_PADDING = 500 // Padding around node bounds
+
+  // Calculate bounds of all nodes from the actual graph data
+  const calculateNodeBounds = () => {
+    if (!graphRef.current) return null
+    
+    const graphData = graphRef.current.graphData()
+    if (!graphData || !graphData.nodes || graphData.nodes.length === 0) return null
+    
+    let minX = Infinity, maxX = -Infinity
+    let minY = Infinity, maxY = -Infinity
+    
+    graphData.nodes.forEach((node: any) => {
+      if (node.x !== undefined && node.y !== undefined) {
+        minX = Math.min(minX, node.x)
+        maxX = Math.max(maxX, node.x)
+        minY = Math.min(minY, node.y)
+        maxY = Math.max(maxY, node.y)
+      }
+    })
+    
+    if (minX === Infinity) return null
+    
+    return {
+      minX: minX - CONTENT_PADDING,
+      maxX: maxX + CONTENT_PADDING,
+      minY: minY - CONTENT_PADDING,
+      maxY: maxY + CONTENT_PADDING,
+      width: maxX - minX + 2 * CONTENT_PADDING,
+      height: maxY - minY + 2 * CONTENT_PADDING
+    }
+  }
 
   // Load manual links from storage
   useEffect(() => {
@@ -786,7 +819,7 @@ export default function GraphFullPage() {
       )}
 
       {/* Graph Container */}
-      <div ref={containerRef} className="flex-1 relative bg-white overflow-hidden">
+      <div ref={containerRef} className="flex-1 relative bg-white" style={{ overflow: 'hidden' }}>
         {/* Zoom Controls */}
         <div className="absolute bottom-6 right-6 z-10 flex flex-col gap-2">
           <button
@@ -906,7 +939,7 @@ export default function GraphFullPage() {
             d3VelocityDecay={0.2}
             enableNodeDrag={true}
             enableZoomInteraction={true}
-            enablePanInteraction={true}
+            enablePanInteraction={false}
             onRenderFramePre={(ctx: CanvasRenderingContext2D, globalScale: number) => {
               drawClusterBoundaries(ctx, globalScale)
             }}
@@ -916,7 +949,7 @@ export default function GraphFullPage() {
                 graphRef.current.zoomToFit(400, 50)
               }
             }}
-            onZoom={() => {
+            onZoom={(transform: any) => {
               hasUserInteractedRef.current = true
             }}
             onNodeDragEnd={(node: any) => {
