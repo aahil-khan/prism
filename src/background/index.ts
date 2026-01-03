@@ -34,7 +34,7 @@ import {
   getBehaviorState
 } from "./ephemeralBehavior"
 import { computePageCoi, computeSessionCoi, loadCoiWeights } from "~/lib/coi"
-import { buildKnowledgeGraph, type KnowledgeGraph } from "~/lib/knowledge-graph"
+import { buildKnowledgeGraph, buildProjectGraph, type KnowledgeGraph } from "~/lib/knowledge-graph"
 import type { PageEvent } from "~/types/page-event"
 import {
   initializeFocusMode,
@@ -122,6 +122,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     rebuildGraphIfNeeded()
     sendResponse({ graph: knowledgeGraph })
     return true
+  }
+
+  if (message.type === "GET_PROJECT_GRAPH") {
+    // Build project-based graph (async)
+    ;(async () => {
+      try {
+        const projects = await loadProjects()
+        const sessions = getSessions()
+        const allPages: PageEvent[] = []
+        
+        for (const session of sessions) {
+          allPages.push(...session.pages)
+        }
+
+        const projectGraph = await buildProjectGraph(projects, allPages, 500)
+        sendResponse({ graph: projectGraph })
+      } catch (error) {
+        console.error("[Background] Error building project graph:", error)
+        sendResponse({ graph: { nodes: [], links: [] } })
+      }
+    })()
+    return true // Keep message channel open for async response
   }
 
   if (message.type === "REFRESH_GRAPH") {
