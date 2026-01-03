@@ -7,6 +7,7 @@ import type { Session } from "~/types/session"
 import type { PageEvent } from "~/types/page-event"
 import type { ProjectCandidate, CANDIDATE_THRESHOLDS } from "~/types/project-candidate"
 import { extractResourceIdentifier, type ResourceIdentifier } from "~/lib/resource-extractor"
+import { loadProjects } from "./projectManager"
 
 
 // Dev mode flag - set to true to use lower thresholds for faster testing
@@ -57,6 +58,27 @@ export async function checkPageForCandidate(
   const resource = extractResourceIdentifier(page.url)
   console.log("[ProjectDetection] Checking page:", page.url, "Resource:", resource)
 
+  // Skip homepage/category resources - only track specific/deep resources
+  if (resource.specificity === "homepage" || resource.specificity === "category") {
+    console.log("[ProjectDetection] Skipping homepage/category resource")
+    return null
+  }
+
+  // Check if URL is already part of any project
+  const projects = await loadProjects()
+  const normalizedUrl = page.url.toLowerCase()
+  const isInProject = projects.some(p => 
+    p.sites?.some(s => {
+      const siteUrl = s.url.toLowerCase()
+      return normalizedUrl.includes(siteUrl) || siteUrl.includes(normalizedUrl)
+    })
+  )
+  
+  if (isInProject) {
+    console.log("[ProjectDetection] URL already in a project, skipping candidate detection")
+    return null
+  }
+
   // Load existing candidates
   const candidates = await loadCandidates()
   
@@ -72,12 +94,6 @@ export async function checkPageForCandidate(
   let candidate = activeCandidates.find(c => 
     c.specificResources.includes(resource.identifier)
   )
-
-  // Skip homepage/category resources - only track specific/deep resources
-  if (resource.specificity === "homepage" || resource.specificity === "category") {
-    console.log("[ProjectDetection] Skipping homepage/category resource")
-    return null
-  }
 
   if (candidate) {
     // Update existing candidate

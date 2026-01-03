@@ -29,11 +29,13 @@ export function GraphPanel() {
   const [manualLinkMode, setManualLinkMode] = useState(false)
   const [selectedNodesForLink, setSelectedNodesForLink] = useState<string[]>([])
   const [manualLinks, setManualLinks] = useState<Array<{source: string, target: string}>>([])
+  const [showExplanations, setShowExplanations] = useState(false)
   const graphRef = useRef<any>()
   const containerRef = useRef<HTMLDivElement>(null)
   const [dimensions, setDimensions] = useState({ width: 500, height: 400 })
   const hasUserInteractedRef = useRef(false)
   const lastGraphTimestampRef = useRef<number>(0)
+  const faviconCache = useRef<Map<string, HTMLImageElement>>(new Map())
 
   // Load manual links from storage
   useEffect(() => {
@@ -131,6 +133,21 @@ export function GraphPanel() {
     // Only load once on mount, no polling
   }, [loadGraph])
 
+  // Preload favicons when graph updates
+  useEffect(() => {
+    if (!graph) return
+    
+    const clusters = new Set(graph.nodes.map(n => n.cluster))
+    clusters.forEach(clusterId => {
+      const topDomain = getClusterTopDomain(graph.nodes, clusterId)
+      if (topDomain && !faviconCache.current.has(topDomain)) {
+        loadFavicon(topDomain).catch(err => 
+          console.log('[GraphPanel] Failed to load favicon for', topDomain)
+        )
+      }
+    })
+  }, [graph])
+
   useEffect(() => {
     const updateDimensions = () => {
       if (containerRef.current) {
@@ -170,6 +187,97 @@ export function GraphPanel() {
         }, 500)
       }
     }
+  }, [graph])
+
+  // Add cluster repulsion force to prevent boundary overlaps
+  useEffect(() => {
+    if (!graph || !graphRef.current) return
+
+    const addClusterRepulsion = () => {
+      try {
+        const forceGraph = graphRef.current
+        if (!forceGraph) return
+
+        // Access the underlying D3 force simulation
+        const simulation = forceGraph.d3Force('link')?.simulation
+        if (!simulation) return
+
+        // Add custom cluster repulsion force
+        simulation.force('cluster-repulsion', () => {
+          const nodes = forceGraph.graphData().nodes
+          if (!nodes || nodes.length === 0) return
+
+          const clusters = new Map<number, {x: number, y: number, count: number, nodes: any[]}>()
+          
+          // Calculate cluster centroids
+          nodes.forEach((node: any) => {
+            if (node.x === undefined || node.y === undefined) return
+            
+            if (!clusters.has(node.cluster)) {
+              clusters.set(node.cluster, {x: 0, y: 0, count: 0, nodes: []})
+            }
+            const cluster = clusters.get(node.cluster)!
+            cluster.x += node.x
+            cluster.y += node.y
+            cluster.count++
+            cluster.nodes.push(node)
+          })
+          
+          // Average to get centroids
+          clusters.forEach(cluster => {
+            if (cluster.count > 0) {
+              cluster.x /= cluster.count
+              cluster.y /= cluster.count
+            }
+          })
+          
+          // Apply repulsion between cluster centroids
+          const clusterIds = Array.from(clusters.keys())
+          for (let i = 0; i < clusterIds.length; i++) {
+            for (let j = i + 1; j < clusterIds.length; j++) {
+              const c1 = clusters.get(clusterIds[i])!
+              const c2 = clusters.get(clusterIds[j])!
+              
+              if (c1.count < 2 || c2.count < 2) continue // Skip single-node clusters
+              
+              const dx = c2.x - c1.x
+              const dy = c2.y - c1.y
+              const distance = Math.sqrt(dx * dx + dy * dy)
+              
+              // Minimum desired distance between cluster centers
+              const minDistance = 100
+              
+              if (distance < minDistance && distance > 0) {
+                const strength = 0.08 // Gentle repulsion
+                const force = (minDistance - distance) / distance * strength
+                
+                const fx = dx * force
+                const fy = dy * force
+                
+                // Apply force to all nodes in each cluster
+                c1.nodes.forEach((node: any) => {
+                  node.vx = (node.vx || 0) - fx
+                  node.vy = (node.vy || 0) - fy
+                })
+                
+                c2.nodes.forEach((node: any) => {
+                  node.vx = (node.vx || 0) + fx
+                  node.vy = (node.vy || 0) + fy
+                })
+              }
+            }
+          }
+        })
+
+        simulation.alpha(0.3).restart()
+      } catch (err) {
+        console.error('[GraphPanel] Failed to add cluster repulsion:', err)
+      }
+    }
+
+    // Add force after simulation stabilizes
+    const timer = setTimeout(addClusterRepulsion, 1000)
+    return () => clearTimeout(timer)
   }, [graph])
 
   if (loading) {
@@ -243,8 +351,9 @@ export function GraphPanel() {
   const filteredNodeIds = new Set(filteredNodes.map(n => n.id))
 
   // Filter edges based on cluster-filtered nodes
+  // Use weight (composite) instead of similarity (embedding-only) for multi-factor filtering
   const filteredEdges = graph.edges.filter(e => 
-    e.similarity >= minSimilarity &&
+    (e.weight || e.similarity) >= minSimilarity &&
     filteredNodeIds.has(e.source) &&
     filteredNodeIds.has(e.target)
   )
@@ -373,14 +482,156 @@ export function GraphPanel() {
     }
   }
 
+  // Get top domain for a cluster
+  const getClusterTopDomain = (nodes: any[], clusterId: number): string | null => {
+    const clusterNodes = nodes.filter(n => n.cluster === clusterId)
+    if (clusterNodes.length === 0) return null
+    
+    const domainCounts = new Map<string, number>()
+    for (const node of clusterNodes) {
+      const count = domainCounts.get(node.domain) || 0
+      domainCounts.set(node.domain, count + node.visitCount)
+    }
+    
+    const topDomain = Array.from(domainCounts.entries())
+      .sort((a, b) => b[1] - a[1])[0]
+    
+    return topDomain ? topDomain[0] : null
+  }
+
+  // Load favicon for domain
+  const loadFavicon = (domain: string): Promise<HTMLImageElement> => {
+    return new Promise((resolve, reject) => {
+      if (faviconCache.current.has(domain)) {
+        resolve(faviconCache.current.get(domain)!)
+        return
+      }
+
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      
+      // Try Google's favicon service first
+      img.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`
+      
+      img.onload = () => {
+        faviconCache.current.set(domain, img)
+        resolve(img)
+      }
+      
+      img.onerror = () => {
+        // Create a placeholder circle with first letter
+        const canvas = document.createElement('canvas')
+        canvas.width = 16
+        canvas.height = 16
+        const ctx = canvas.getContext('2d')!
+        ctx.fillStyle = '#e5e7eb'
+        ctx.fillRect(0, 0, 16, 16)
+        ctx.fillStyle = '#6b7280'
+        ctx.font = '10px sans-serif'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(domain[0].toUpperCase(), 8, 8)
+        
+        const placeholderImg = new Image()
+        placeholderImg.src = canvas.toDataURL()
+        placeholderImg.onload = () => {
+          faviconCache.current.set(domain, placeholderImg)
+          resolve(placeholderImg)
+        }
+      }
+    })
+  }
+
   // Draw cluster boundaries for clusters with 2+ nodes
   const drawClusterBoundaries = (ctx: CanvasRenderingContext2D, globalScale: number) => {
     // Only draw if zoomed out too much
     if (globalScale < 0.5) return
     
-    clustersWithMultipleNodes.forEach(clusterId => {
-      const clusterNodes = graphData.nodes.filter(n => n.cluster === clusterId)
+    // Helper: Find connected components within a set of nodes
+    const getConnectedComponents = (nodes: any[], allEdges: any[]) => {
+      const components: Array<Set<string>> = []
+      const visited = new Set<string>()
+      
+      // Build adjacency list from edges
+      const nodeIds = new Set(nodes.map(n => n.id))
+      const adjacency = new Map<string, Set<string>>()
+      nodes.forEach(n => adjacency.set(n.id, new Set()))
+      
+      allEdges.forEach((edge: any) => {
+        const sourceId = typeof edge.source === 'object' ? edge.source.id : edge.source
+        const targetId = typeof edge.target === 'object' ? edge.target.id : edge.target
+        
+        if (nodeIds.has(sourceId) && nodeIds.has(targetId)) {
+          adjacency.get(sourceId)?.add(targetId)
+          adjacency.get(targetId)?.add(sourceId)
+        }
+      })
+      
+      // BFS to find connected components
+      const bfs = (startId: string): Set<string> => {
+        const component = new Set<string>()
+        const queue = [startId]
+        visited.add(startId)
+        component.add(startId)
+        
+        while (queue.length > 0) {
+          const nodeId = queue.shift()!
+          const neighbors = adjacency.get(nodeId) || new Set()
+          
+          for (const neighborId of neighbors) {
+            if (!visited.has(neighborId)) {
+              visited.add(neighborId)
+              component.add(neighborId)
+              queue.push(neighborId)
+            }
+          }
+        }
+        
+        return component
+      }
+      
+      // Find all components
+      nodes.forEach(node => {
+        if (!visited.has(node.id)) {
+          const component = bfs(node.id)
+          if (component.size >= 2) { // Only boundaries for 2+ connected nodes
+            components.push(component)
+          }
+        }
+      })
+      
+      return components
+    }
+    
+    // Group nodes by Louvain cluster
+    const louvainClusters = new Map<number, any[]>()
+    graphData.nodes.forEach(n => {
+      if (!louvainClusters.has(n.cluster)) {
+        louvainClusters.set(n.cluster, [])
+      }
+      louvainClusters.get(n.cluster)!.push(n)
+    })
+    
+    // For each Louvain cluster, find connected components
+    const allComponents: Array<{nodes: any[], clusterId: number, componentId: number}> = []
+    louvainClusters.forEach((clusterNodes, clusterId) => {
       if (clusterNodes.length < 2) return
+      
+      const components = getConnectedComponents(clusterNodes, graphData.links)
+      components.forEach((componentNodeIds, idx) => {
+        const componentNodes = clusterNodes.filter(n => componentNodeIds.has(n.id))
+        if (componentNodes.length >= 2) {
+          allComponents.push({
+            nodes: componentNodes,
+            clusterId,
+            componentId: idx
+          })
+        }
+      })
+    })
+    
+    // Draw boundary for each connected component
+    allComponents.forEach(({nodes: clusterNodes, clusterId}) => {
       
       // Calculate bounding box for cluster nodes
       const xs = clusterNodes.map((n: any) => n.x).filter(x => x !== undefined)
@@ -418,6 +669,66 @@ export function GraphPanel() {
       
       ctx.fillStyle = color + '08' // 3% opacity
       ctx.fill()
+      
+      // Draw cluster label at the top
+      const clusterLabel = generateClusterLabel(graphData.nodes, clusterId)
+      const centerX = (minX + maxX) / 2
+      const labelY = minY - padding - (20 / globalScale)
+      
+      // Get favicon for cluster's top domain
+      const topDomain = getClusterTopDomain(graphData.nodes, clusterId)
+      const favicon = topDomain && faviconCache.current.has(topDomain) 
+        ? faviconCache.current.get(topDomain)! 
+        : null
+      
+      // Set font and measure text
+      const fontSize = 10 / globalScale
+      ctx.font = `${fontSize}px 'Breeze Sans', sans-serif`
+      const textWidth = ctx.measureText(clusterLabel).width
+      const labelPadding = 6 / globalScale
+      const iconSize = favicon ? 12 / globalScale : 0
+      const iconPadding = favicon ? 4 / globalScale : 0
+      
+      // Draw label background with border
+      ctx.fillStyle = 'white'
+      ctx.strokeStyle = color + '60'
+      ctx.lineWidth = 1 / globalScale
+      ctx.setLineDash([])
+      const totalWidth = iconSize + iconPadding + textWidth
+      const labelRectX = centerX - totalWidth/2 - labelPadding
+      const labelRectY = labelY - fontSize - labelPadding
+      const labelRectW = totalWidth + labelPadding * 2
+      const labelRectH = Math.max(fontSize, iconSize) + labelPadding * 2
+      
+      // Rounded rectangle for label background
+      ctx.beginPath()
+      const labelRadius = 4 / globalScale
+      ctx.moveTo(labelRectX + labelRadius, labelRectY)
+      ctx.lineTo(labelRectX + labelRectW - labelRadius, labelRectY)
+      ctx.quadraticCurveTo(labelRectX + labelRectW, labelRectY, labelRectX + labelRectW, labelRectY + labelRadius)
+      ctx.lineTo(labelRectX + labelRectW, labelRectY + labelRectH - labelRadius)
+      ctx.quadraticCurveTo(labelRectX + labelRectW, labelRectY + labelRectH, labelRectX + labelRectW - labelRadius, labelRectY + labelRectH)
+      ctx.lineTo(labelRectX + labelRadius, labelRectY + labelRectH)
+      ctx.quadraticCurveTo(labelRectX, labelRectY + labelRectH, labelRectX, labelRectY + labelRectH - labelRadius)
+      ctx.lineTo(labelRectX, labelRectY + labelRadius)
+      ctx.quadraticCurveTo(labelRectX, labelRectY, labelRectX + labelRadius, labelRectY)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+      
+      // Draw favicon icon if available
+      if (favicon) {
+        const iconX = centerX - totalWidth/2
+        const iconY = labelY - iconSize/2 - fontSize/2
+        ctx.drawImage(favicon, iconX, iconY, iconSize, iconSize)
+      }
+      
+      // Draw label text
+      ctx.fillStyle = color
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      const textX = favicon ? centerX + iconSize/2 + iconPadding/2 : centerX
+      ctx.fillText(clusterLabel, textX, labelY - fontSize/2)
     })
   }
 
@@ -507,6 +818,18 @@ export function GraphPanel() {
             title="Click two nodes to create a manual link">
             <Link className="h-3.5 w-3.5" />
             <span>Link</span>
+          </button>
+          <button
+            onClick={() => setShowExplanations(!showExplanations)}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-gray-50"
+            style={{ 
+              color: showExplanations ? '#FFFFFF' : '#080A0B', 
+              fontFamily: "'Breeze Sans'", 
+              border: '1px solid #E5E5E5',
+              backgroundColor: showExplanations ? '#0072de' : 'transparent'
+            }}
+            title="Explain connections">
+            <span>📊</span>
           </button>
           <button
             onClick={handleRefresh}
@@ -697,9 +1020,19 @@ export function GraphPanel() {
             }}
             nodeColor={(node: any) => node.color}
             nodeVal={(node: any) => {
+              // Check if node is connected (has any edges)
+              const isConnected = graphData.links.some((link: any) => {
+                const sourceId = typeof link.source === 'object' ? link.source.id : link.source
+                const targetId = typeof link.target === 'object' ? link.target.id : link.target
+                return sourceId === node.id || targetId === node.id
+              })
+              
               const baseSize = 4
               const sizeFactor = Math.log(node.visitCount + 1) * 3
-              return Math.max(baseSize, Math.min(baseSize + sizeFactor, 18))
+              const calculatedSize = Math.max(baseSize, Math.min(baseSize + sizeFactor, 18))
+              
+              // Isolated nodes get 250% size boost for strong visibility
+              return isConnected ? calculatedSize : calculatedSize * 3.5
             }}
             nodeRelSize={8}
             nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
@@ -707,7 +1040,16 @@ export function GraphPanel() {
               const fontSize = 11 / globalScale
               ctx.font = `${fontSize}px 'Breeze Sans', Sans-Serif`
               
-              const size = node.__bckgDimensions ? node.__bckgDimensions[0] : 4
+              // Check if node is connected
+              const isConnected = graphData.links.some((link: any) => {
+                const sourceId = typeof link.source === 'object' ? link.source.id : link.source
+                const targetId = typeof link.target === 'object' ? link.target.id : link.target
+                return sourceId === node.id || targetId === node.id
+              })
+              
+              const baseSize = node.__bckgDimensions ? node.__bckgDimensions[0] : 4
+              // Apply size boost for isolated nodes in rendering
+              const size = isConnected ? baseSize : baseSize * 1.5
               const isSelected = selectedNodesForLink.includes(node.id)
               
               // Draw node circle with larger size
@@ -754,7 +1096,7 @@ export function GraphPanel() {
             enableZoomInteraction={true}
             enablePanInteraction={true}
             onRenderFramePre={(ctx: CanvasRenderingContext2D, globalScale: number) => {
-              // Cluster boundaries disabled for cleaner view
+              drawClusterBoundaries(ctx, globalScale)
             }}
             onEngineStop={() => {
               // Only auto-fit on initial load, not after user interactions
@@ -779,6 +1121,86 @@ export function GraphPanel() {
           </div>
         )}
       </div>
+
+      {/* Explanation Panel - Compact for Sidepanel */}
+      {showExplanations && graph && (
+        <div className="absolute top-16 right-2 w-80 max-h-96 bg-white rounded-lg shadow-xl border overflow-hidden flex flex-col z-50"
+             style={{ borderColor: '#E5E5E5' }}>
+          <div className="flex items-center justify-between px-3 py-2 border-b bg-blue-50" style={{ borderColor: '#E5E5E5' }}>
+            <h3 className="font-semibold text-xs" style={{ fontFamily: "'Breeze Sans'", color: '#080A0B' }}>
+              📊 Connection Explanations
+            </h3>
+            <button 
+              onClick={() => setShowExplanations(false)}
+              className="text-gray-400 hover:text-gray-600">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          
+          <div className="overflow-y-auto p-2 space-y-2 text-[10px]" style={{ fontFamily: "'Breeze Sans'" }}>
+            {Array.from(new Set(graph.nodes.map(n => n.cluster))).slice(0, 3).map(clusterId => {
+              const clusterNodes = graph.nodes.filter(n => n.cluster === clusterId)
+              if (clusterNodes.length < 2) return null
+              
+              const clusterEdges = graph.edges.filter(e => {
+                const sourceNode = graph.nodes.find(n => n.id === e.source)
+                const targetNode = graph.nodes.find(n => n.id === e.target)
+                return sourceNode?.cluster === clusterId && targetNode?.cluster === clusterId
+              }).slice(0, 3)
+              
+              if (clusterEdges.length === 0) return null
+              
+              const clusterLabel = generateClusterLabel(graph.nodes, clusterId)
+              const clusterColor = getClusterColor(clusterId)
+              
+              return (
+                <div key={clusterId} className="border rounded" style={{ borderColor: clusterColor + '40' }}>
+                  <div className="px-2 py-1.5" style={{ backgroundColor: clusterColor + '10' }}>
+                    <div className="font-semibold" style={{ color: clusterColor }}>
+                      {clusterLabel}
+                    </div>
+                  </div>
+                  
+                  <div className="p-2 space-y-1.5">
+                    {clusterEdges.map((edge, idx) => {
+                      const breakdown = edge.breakdown
+                      if (!breakdown) return null
+                      
+                      return (
+                        <div key={idx} className="pb-1.5 border-b last:border-0" style={{ borderColor: '#f3f4f6' }}>
+                          <div className="space-y-0.5">
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">🧠 Semantic</span>
+                              <span className="font-mono font-semibold" style={{ color: clusterColor }}>
+                                {(breakdown.embedding * 100).toFixed(0)}%
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">🔤 Keywords</span>
+                              <span className="font-mono font-semibold" style={{ color: clusterColor }}>
+                                {(breakdown.keyword * 100).toFixed(0)}%
+                              </span>
+                            </div>
+                            {breakdown.sameDomain && (
+                              <div className="flex justify-between text-blue-600">
+                                <span>🌐 Same domain</span>
+                                <span className="font-mono font-semibold">+{((breakdown.domainBoost - 1) * 100).toFixed(0)}%</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+            <div className="text-center text-gray-400 pt-1">
+              Open full view for complete details
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -219,7 +219,7 @@ export function FocusPanel() {
     <div className="flex flex-col h-full" style={{ fontFamily: "'Breeze Sans'" }}>
       {/* Header with Focus Mode Toggle */}
       <div className="p-4 border-b" style={{ borderColor: '#E5E7EB' }}>
-        <div className="flex items-center justify-between mb-3">
+        {/* <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold" style={{ color: '#1F2937' }}>
             Focus Mode
           </h2>
@@ -239,7 +239,7 @@ export function FocusPanel() {
               <Upload className="h-4 w-4" style={{ color: '#6B7280' }} />
             </button>
           </div>
-        </div>
+        </div> */}
 
         {/* Large Focus Mode Toggle Button */}
         <button

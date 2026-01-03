@@ -1,4 +1,6 @@
 import type { PageEvent } from "~/types/page-event"
+import type { Project } from "~/types/project"
+import type { Session } from "~/types/session"
 
 export interface GraphNode {
   id: string
@@ -8,6 +10,11 @@ export interface GraphNode {
   cluster: number
   visitCount: number
   searchQuery?: string // Extracted search query for search engine results
+  projectId?: string // Project ID if in project mode
+  projectName?: string // Project name for display
+  timestamp?: number // For timeline ordering
+  description?: string // Project description (for project mode)
+  keywords?: string[] // Project keywords (for project mode)
 }
 
 export interface GraphEdge {
@@ -15,6 +22,14 @@ export interface GraphEdge {
   target: string
   similarity: number
   weight?: number // Multi-factor composite weight
+  breakdown?: {
+    embedding: number
+    keyword: number
+    temporal: number
+    domainBoost: number
+    sameDomain: boolean
+    hoursSinceVisit?: number
+  }
 }
 
 export interface KnowledgeGraph {
@@ -69,15 +84,20 @@ function jaccardSimilarity(setA: Set<string>, setB: Set<string>): number {
   return intersection.size / union.size
 }
 
+// Domain affinity: Same-domain pages are more related (researching one product/company)
+function domainAffinity(pageA: PageEvent, pageB: PageEvent): number {
+  return pageA.domain === pageB.domain ? 1.3 : 1.0
+}
+
 // Calculate multi-factor edge weight
 function calculateEdgeWeight(
   pageA: PageEvent,
   pageB: PageEvent,
   embeddingSimilarity: number,
   domainCountInGraph: Map<string, number>
-): number {
-  // α: Embedding similarity (semantic closeness) - 0.6
-  const embeddingComponent = embeddingSimilarity * 0.6
+): { weight: number; breakdown: any } {
+  // α: Embedding similarity (semantic closeness) - 0.7
+  const embeddingComponent = embeddingSimilarity * 0.7
   
   // β: Keyword Jaccard similarity (lexical overlap) - 0.2
   const keywordsA = extractKeywords(pageA.title)
@@ -89,18 +109,23 @@ function calculateEdgeWeight(
   const hoursDiff = timeDiff / (1000 * 60 * 60)
   const temporalComponent = Math.exp(-hoursDiff / 24) * 0.1 // Decay over 24 hours
   
-  // δ: Domain penalty (prevent single-domain dominance) - 0.1
-  let domainPenalty = 0
-  if (pageA.domain === pageB.domain) {
-    const domainCount = domainCountInGraph.get(pageA.domain) || 1
-    // Penalize if domain is overrepresented (>10% of graph)
-    if (domainCount > 10) {
-      domainPenalty = Math.min(0.1, domainCount / 1000)
+  // δ: Domain affinity boost (same-domain pages are more related)
+  const affinityBoost = domainAffinity(pageA, pageB)
+  
+  const baseWeight = embeddingComponent + keywordComponent + temporalComponent
+  const finalWeight = baseWeight * affinityBoost
+  
+  return {
+    weight: Math.max(0, Math.min(1, finalWeight)),
+    breakdown: {
+      embedding: embeddingComponent,
+      keyword: keywordComponent,
+      temporal: temporalComponent,
+      domainBoost: affinityBoost,
+      sameDomain: pageA.domain === pageB.domain,
+      hoursSinceVisit: hoursDiff
     }
   }
-  
-  const weight = embeddingComponent + keywordComponent + temporalComponent - domainPenalty
-  return Math.max(0, Math.min(1, weight)) // Clamp to [0, 1]
 }
 
 // Filter out authentication, login, and non-content pages
@@ -274,11 +299,35 @@ export function buildKnowledgeGraph(
 
   // Build weighted graph with multi-factor similarity
   const edges: GraphEdge[] = []
-  const edgesByNode = new Map<string, Array<{ target: string; similarity: number; weight: number }>>()
+  const edgesByNode = new Map<string, Array<{ 
+    target: string; 
+    similarity: number; 
+    weight: number; 
+    breakdown: { 
+      embedding: number; 
+      keyword: number; 
+      temporal: number; 
+      domainBoost: number; 
+      sameDomain: boolean;
+      hoursSinceVisit?: number;
+    } 
+  }>>()
 
   for (let i = 0; i < validPages.length; i++) {
     const pageA = validPages[i]
-    const neighbors: Array<{ target: string; similarity: number; weight: number }> = []
+    const neighbors: Array<{ 
+      target: string; 
+      similarity: number; 
+      weight: number; 
+      breakdown: { 
+        embedding: number; 
+        keyword: number; 
+        temporal: number; 
+        domainBoost: number; 
+        sameDomain: boolean;
+        hoursSinceVisit?: number;
+      } 
+    }> = []
 
     for (let j = i + 1; j < validPages.length; j++) {
       const pageB = validPages[j]
@@ -286,11 +335,12 @@ export function buildKnowledgeGraph(
 
       // Only consider if embedding similarity exceeds minimum threshold
       if (embeddingSimilarity >= similarityThreshold) {
-        const weight = calculateEdgeWeight(pageA, pageB, embeddingSimilarity, domainCounts)
+        const weightResult = calculateEdgeWeight(pageA, pageB, embeddingSimilarity, domainCounts)
         neighbors.push({ 
           target: pageB.title, 
           similarity: embeddingSimilarity,
-          weight: weight
+          weight: weightResult.weight,
+          breakdown: weightResult.breakdown
         })
       }
     }
@@ -306,7 +356,8 @@ export function buildKnowledgeGraph(
         source: pageA.title,
         target: neighbor.target,
         similarity: neighbor.similarity,
-        weight: neighbor.weight
+        weight: neighbor.weight,
+        breakdown: neighbor.breakdown
       })
     }
   }
@@ -558,4 +609,107 @@ export function getClusterColor(clusterId: number): string {
     "#be123c", // rose-600
   ]
   return colors[clusterId % colors.length]
+}
+
+/**
+ * Build project-based knowledge graph
+ * Each site within a project becomes a node, grouped by project cluster
+ */
+export async function buildProjectGraph(
+  projects: Project[],
+  recentPages: PageEvent[],
+  maxNodes: number = 500
+): Promise<KnowledgeGraph> {
+  console.log("[ProjectGraph] Building project-based graph", {
+    projects: projects.length
+  })
+
+  if (projects.length === 0) {
+    return { nodes: [], edges: [], lastUpdated: Date.now() }
+  }
+
+  // Create nodes from project sites
+  const nodes: GraphNode[] = []
+  const edges: GraphEdge[] = []
+  
+  projects.forEach((project, projectIndex) => {
+    if (!project.sites || project.sites.length === 0) return
+    
+    // Each site becomes a node in the same cluster
+    project.sites.forEach((site, siteIndex) => {
+      let domain = 'Unknown'
+      try {
+        const url = site.url.startsWith('http') ? site.url : `https://${site.url}`
+        domain = new URL(url).hostname
+      } catch (e) {
+        domain = site.url.split('/')[0] || 'Unknown'
+      }
+      
+      const node: GraphNode = {
+        id: `${project.id}-site-${siteIndex}`,
+        title: site.title,
+        url: site.url,
+        domain: domain,
+        cluster: projectIndex, // All sites in same project share cluster ID
+        visitCount: site.visitCount,
+        projectId: project.id,
+        projectName: project.name,
+        timestamp: site.addedAt,
+        description: project.description,
+        keywords: project.keywords
+      }
+      
+      nodes.push(node)
+    })
+    
+    // Connect sites within the same project
+    const projectNodes = nodes.filter(n => n.projectId === project.id)
+    for (let i = 0; i < projectNodes.length - 1; i++) {
+      for (let j = i + 1; j < projectNodes.length; j++) {
+        edges.push({
+          source: projectNodes[i].id,
+          target: projectNodes[j].id,
+          similarity: 0.8,
+          weight: 0.8,
+          breakdown: {
+            embedding: 0,
+            keyword: 0,
+            temporal: 0,
+            domainBoost: 1,
+            sameDomain: projectNodes[i].domain === projectNodes[j].domain
+          }
+        })
+      }
+    }
+  })
+
+  console.log("[ProjectGraph] Built project graph:", {
+    nodes: nodes.length,
+    edges: edges.length,
+    projects: projects.length
+  })
+
+  return {
+    nodes,
+    edges,
+    lastUpdated: Date.now()
+  }
+}
+
+/**
+ * Generate label for project-based cluster
+ */
+export function generateProjectClusterLabel(nodes: any[], clusterId: number): string {
+  const clusterNodes = nodes.filter(n => n.cluster === clusterId)
+  
+  if (clusterNodes.length === 0) return `Cluster ${clusterId}`
+  
+  // If nodes have projectName, use it
+  const projectName = clusterNodes[0]?.projectName
+  if (projectName) {
+    return `${projectName} (${clusterNodes.length})`
+  }
+  
+  // Otherwise, use domain-based label
+  return generateClusterLabel(nodes, clusterId)
 }

@@ -51,7 +51,7 @@ type EdgePosition = 'left' | 'right'
 
 type Notification = {
   id: string
-  type: 'learning' | 'candidate' | 'suggestion' | 'similar-pages'
+  type: 'learning' | 'candidate' | 'suggestion' | 'similar-pages' | 'project-reminder' | 'project-main-site'
   title: string
   message?: string
   timestamp: number
@@ -211,6 +211,48 @@ const Indicator = () => {
         sendResponse({ received: true })
       }
       
+      // Handle project reminder notifications
+      if (message.type === "show-project-reminder") {
+        console.log("⏰ Project reminder triggered:", message.payload)
+        const { projectId, projectName, projectDescription, snoozeCount } = message.payload
+        
+        const notification: Notification = {
+          id: `reminder-${projectId}-${Date.now()}`,
+          type: 'project-reminder',
+          title: `⏰ ${projectName}`,
+          message: projectDescription || "Time to work on this project",
+          timestamp: Date.now(),
+          payload: { projectId, projectName, projectDescription, snoozeCount }
+        }
+        setNotifications((prev) => [notification, ...prev])
+        setMode('notification')
+        setIsExpanded(false)
+        // Auto-expand after 800ms
+        setTimeout(() => setNotificationExpanded(true), 800)
+        sendResponse({ received: true })
+      }
+      
+      // Handle project main site visit notifications
+      if (message.type === "PROJECT_MAIN_SITE_VISIT") {
+        console.log("🏠 Project main site visit detected:", message.payload)
+        const { projectId, projectName, currentUrl } = message.payload
+        
+        const notification: Notification = {
+          id: `main-site-${projectId}-${Date.now()}`,
+          type: 'project-main-site',
+          title: `Part of ${projectName}`,
+          message: "This site is the main site of your project",
+          timestamp: Date.now(),
+          payload: { projectId, projectName, currentUrl }
+        }
+        setNotifications((prev) => [notification, ...prev])
+        setMode('notification')
+        setIsExpanded(false)
+        // Auto-expand after 800ms
+        setTimeout(() => setNotificationExpanded(true), 800)
+        sendResponse({ received: true })
+      }
+      
       if (message.type === "SHOW_NOTIFICATION") {
         const notification: Notification = {
           id: Date.now().toString(),
@@ -349,7 +391,10 @@ const Indicator = () => {
     const currentTitle = document.title
     const isNewTab = isNewTabUrl(currentUrl)
 
-    const payload: Record<string, unknown> = { "sidepanel-active-tab": "projects" }
+    const payload: Record<string, unknown> = { 
+      "sidepanel-active-tab": "projects",
+      "sidepanel-show-add-current-page": true
+    }
 
     if (!isNewTab) {
       payload["sidepanel-add-current-page"] = {
@@ -1020,6 +1065,203 @@ const Indicator = () => {
                       e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.05)'
                     }}>
                     Dismiss
+                  </button>
+                </div>
+              )}
+              
+              {/* Action buttons for project reminder notifications */}
+              {notifications[0].type === 'project-reminder' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      console.log("📂 Open Project clicked:", notifications[0].payload.projectId)
+                      
+                      // Send message to background to open project in tab group
+                      chrome.runtime.sendMessage({
+                        type: "OPEN_PROJECT_IN_TAB_GROUP",
+                        payload: { projectId: notifications[0].payload.projectId }
+                      })
+                      
+                      // Dismiss notification
+                      setNotifications([])
+                      setMode('normal')
+                    }}
+                    style={{
+                      backgroundColor: '#0072de',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '10px 12px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      fontFamily: "'Breeze Sans', sans-serif",
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#0056b3'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = '#0072de'
+                    }}>
+                    Open Project
+                  </button>
+                  
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        console.log("⏰ Snooze clicked:", notifications[0].payload.projectId)
+                        
+                        // Send message to background to snooze reminder
+                        chrome.runtime.sendMessage({
+                          type: "SNOOZE_REMINDER",
+                          payload: { projectId: notifications[0].payload.projectId }
+                        })
+                        
+                        // Dismiss notification
+                        setNotifications([])
+                        setMode('normal')
+                      }}
+                      disabled={notifications[0].payload.snoozeCount >= 3}
+                      style={{
+                        backgroundColor: notifications[0].payload.snoozeCount >= 3 
+                          ? 'rgba(0, 0, 0, 0.02)' 
+                          : 'rgba(0, 0, 0, 0.05)',
+                        color: notifications[0].payload.snoozeCount >= 3 ? '#ccc' : '#666',
+                        border: '1px solid #E5E5E5',
+                        borderRadius: '6px',
+                        padding: '8px 12px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: notifications[0].payload.snoozeCount >= 3 ? 'not-allowed' : 'pointer',
+                        flex: 1,
+                        fontFamily: "'Breeze Sans', sans-serif",
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (notifications[0].payload.snoozeCount < 3) {
+                          e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.08)'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (notifications[0].payload.snoozeCount < 3) {
+                          e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.05)'
+                        }
+                      }}>
+                      Snooze 10min {notifications[0].payload.snoozeCount > 0 ? `(${notifications[0].payload.snoozeCount}/3)` : ''}
+                    </button>
+                    
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        console.log("🚫 Dismiss Reminder clicked:", notifications[0].payload.projectId)
+                        
+                        // Send message to background to dismiss reminder entirely
+                        chrome.runtime.sendMessage({
+                          type: "DISMISS_REMINDER",
+                          payload: { projectId: notifications[0].payload.projectId }
+                        })
+                        
+                        // Dismiss notification
+                        setNotifications([])
+                        setMode('normal')
+                      }}
+                      style={{
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        color: '#ef4444',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        borderRadius: '6px',
+                        padding: '8px 12px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        flex: 1,
+                        fontFamily: "'Breeze Sans', sans-serif",
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.15)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'
+                      }}>
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              {/* Action buttons for project main site notifications */}
+              {notifications[0].type === 'project-main-site' && (
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      console.log("📂 Open Project clicked:", notifications[0].payload.projectId)
+                      
+                      // Send message to background to open project in tab group
+                      chrome.runtime.sendMessage({
+                        type: "OPEN_PROJECT_IN_TAB_GROUP",
+                        payload: { projectId: notifications[0].payload.projectId }
+                      })
+                      
+                      // Dismiss notification
+                      setNotifications([])
+                      setMode('normal')
+                    }}
+                    style={{
+                      backgroundColor: '#0072de',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '10px 12px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      flex: 1,
+                      fontFamily: "'Breeze Sans', sans-serif",
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#0056b3'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = '#0072de'
+                    }}>
+                    Open Project
+                  </button>
+                  
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      console.log("⏭️ Not Now clicked")
+                      
+                      // Dismiss notification
+                      setNotifications([])
+                      setMode('normal')
+                    }}
+                    style={{
+                      backgroundColor: 'rgba(0, 0, 0, 0.05)',
+                      color: '#666',
+                      border: '1px solid #E5E5E5',
+                      borderRadius: '6px',
+                      padding: '10px 12px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      flex: 1,
+                      fontFamily: "'Breeze Sans', sans-serif",
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.08)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.05)'
+                    }}>
+                    Not Now
                   </button>
                 </div>
               )}
