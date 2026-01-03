@@ -216,27 +216,29 @@ export function FocusPanel() {
   }
 
   return (
-    <div className="flex flex-col h-full" style={{ fontFamily: "'Breeze Sans'" }}>
+    <div className="flex flex-col h-full bg-gray-50" style={{ fontFamily: "'Breeze Sans'" }}>
       {/* Header with Focus Mode Toggle */}
-      <div className="p-4 border-b" style={{ borderColor: '#E5E7EB' }}>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold" style={{ color: '#1F2937' }}>
+      <div className="p-4 bg-white border-b" style={{ borderColor: '#E5E5E5' }}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold" style={{ color: '#080A0B' }}>
             Focus Mode
           </h2>
           <div className="flex gap-2">
             <button
               onClick={exportBlocklist}
-              className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              className="p-2 rounded-lg hover:bg-blue-50 transition-all"
               title="Export blocklist"
+              style={{ color: '#0072de' }}
             >
-              <Download className="h-4 w-4" style={{ color: '#6B7280' }} />
+              <Download className="h-4 w-4" />
             </button>
             <button
               onClick={handleFileImport}
-              className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              className="p-2 rounded-lg hover:bg-blue-50 transition-all"
               title="Import blocklist"
+              style={{ color: '#0072de' }}
             >
-              <Upload className="h-4 w-4" style={{ color: '#6B7280' }} />
+              <Upload className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -244,36 +246,55 @@ export function FocusPanel() {
         {/* Large Focus Mode Toggle Button */}
         <button
           onClick={toggleFocusMode}
-          className="w-full p-4 rounded-xl transition-all flex items-center justify-between"
+          className="w-full p-5 rounded-xl transition-all flex items-center justify-between shadow-sm hover:shadow-md"
           style={{
-            backgroundColor: focusState.isActive ? '#0072de' : '#F3F4F6',
-            color: focusState.isActive ? '#FFFFFF' : '#6B7280'
+            backgroundColor: focusState.isActive ? '#0072de' : '#FFFFFF',
+            color: focusState.isActive ? '#FFFFFF' : '#080A0B',
+            border: focusState.isActive ? 'none' : '2px solid #E5E5E5'
           }}
         >
-          <div className="flex items-center gap-3">
-            {focusState.isActive ? (
-              <Power className="h-6 w-6" />
-            ) : (
-              <PowerOff className="h-6 w-6" />
-            )}
+          <div className="flex items-center gap-4">
+            <div
+              className="p-3 rounded-lg"
+              style={{
+                backgroundColor: focusState.isActive ? 'rgba(255,255,255,0.2)' : '#F3F4F6'
+              }}
+            >
+              {focusState.isActive ? (
+                <Power className="h-6 w-6" />
+              ) : (
+                <PowerOff className="h-6 w-6" style={{ color: '#9A9FA6' }} />
+              )}
+            </div>
             <div className="text-left">
               <div className="font-semibold text-base">
                 {focusState.isActive ? "Focus Mode Active" : "Focus Mode Inactive"}
               </div>
-              <div className="text-xs opacity-80">
+              <div className="text-xs mt-0.5" style={{ 
+                color: focusState.isActive ? 'rgba(255,255,255,0.8)' : '#9A9FA6'
+              }}>
                 {focusState.isActive 
-                  ? `Blocking ${focusState.enabledCategories.length} categories`
-                  : "Click to activate website blocking"
+                  ? `${focusState.enabledCategories.length} ${focusState.enabledCategories.length === 1 ? 'category' : 'categories'} blocking sites`
+                  : "Activate to block distracting websites"
                 }
               </div>
             </div>
+          </div>
+          <div
+            className="px-4 py-2 rounded-lg text-sm font-medium"
+            style={{
+              backgroundColor: focusState.isActive ? 'rgba(255,255,255,0.2)' : '#F3F4F6',
+              color: focusState.isActive ? '#FFFFFF' : '#080A0B'
+            }}
+          >
+            {focusState.isActive ? 'ON' : 'OFF'}
           </div>
         </button>
       </div>
 
       {/* Categories List */}
       <div className="flex-1 overflow-y-auto">
-        <div className="p-3 space-y-2">
+        <div className="p-4 space-y-3">
           {Object.values(CATEGORY_INFO).map((categoryInfo) => {
             const entries = getCategoryEntries(categoryInfo.id)
             const isExpanded = expandedCategories.has(categoryInfo.id)
@@ -283,103 +304,115 @@ export function FocusPanel() {
             return (
               <div
                 key={categoryInfo.id}
-                className="border rounded-lg overflow-hidden"
-                style={{ borderColor: '#E5E7EB' }}
+                className="bg-white rounded-xl shadow-sm overflow-hidden border hover:shadow-md transition-shadow"
+                style={{ borderColor: '#E5E5E5' }}
               >
                 {/* Category Header */}
-                <div className="flex items-center justify-between p-3 bg-gray-50">
+                <div className="flex items-center justify-between p-4">
                   <button
                     onClick={() => toggleCategoryExpanded(categoryInfo.id)}
-                    className="flex items-center gap-2 flex-1 text-left"
+                    className="flex items-center gap-3 flex-1 text-left hover:opacity-80 transition-opacity"
                   >
-                    <span className="text-xl">{categoryInfo.emoji}</span>
+                    <div
+                      className="w-10 h-10 flex items-center justify-center rounded-lg text-xl"
+                      style={{ backgroundColor: '#F3F4F6' }}
+                    >
+                      {categoryInfo.emoji}
+                    </div>
                     <div className="flex-1">
-                      <div className="font-medium text-sm" style={{ color: '#1F2937' }}>
+                      <div className="font-semibold text-sm" style={{ color: '#080A0B' }}>
                         {categoryInfo.name}
                       </div>
-                      <div className="text-xs" style={{ color: '#9A9FA6' }}>
+                      <div className="text-xs mt-0.5" style={{ color: '#9A9FA6' }}>
                         {entries.length} {entries.length === 1 ? 'site' : 'sites'}
                       </div>
                     </div>
-                    {isExpanded ? (
-                      <ChevronUp className="h-4 w-4" style={{ color: '#6B7280' }} />
-                    ) : (
-                      <ChevronDown className="h-4 w-4" style={{ color: '#6B7280' }} />
-                    )}
+                    <ChevronDown
+                      className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                      style={{ color: '#9A9FA6' }}
+                    />
                   </button>
                   
                   {/* Category Enable/Disable Toggle */}
                   <button
                     onClick={() => toggleCategory(categoryInfo.id)}
-                    className={`ml-2 px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                    className={`ml-3 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
                       isEnabled 
-                        ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
-                        : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                        ? 'shadow-sm' 
+                        : ''
                     }`}
+                    style={{
+                      backgroundColor: isEnabled ? '#0072de' : '#F3F4F6',
+                      color: isEnabled ? '#FFFFFF' : '#080A0B'
+                    }}
                   >
-                    {isEnabled ? 'Enabled' : 'Disabled'}
+                    {isEnabled ? 'ON' : 'OFF'}
                   </button>
                 </div>
 
                 {/* Category Entries (Expanded) */}
                 {isExpanded && (
-                  <div className="p-3 bg-white space-y-2">
-                    {entries.length === 0 ? (
-                      <p className="text-xs text-center py-4" style={{ color: '#9A9FA6' }}>
-                        No sites in this category
-                      </p>
-                    ) : (
-                      entries.map(({ entry, index }) => (
-                        <div
-                          key={index}
-                          className="flex items-start justify-between p-2 rounded-lg hover:bg-gray-50"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-mono truncate" style={{ color: '#1F2937' }}>
-                              {entry.pattern}
-                            </div>
-                            {entry.reason && (
-                              <div className="text-xs truncate" style={{ color: '#9A9FA6' }}>
-                                {entry.reason}
-                              </div>
-                            )}
-                          </div>
-                          <button
-                            onClick={() => deleteEntry(index)}
-                            className="ml-2 p-1 rounded hover:bg-red-50 transition-colors"
-                            title="Delete entry"
+                  <div className="px-4 pb-4 space-y-2 border-t" style={{ borderColor: '#F3F4F6' }}>
+                    <div className="pt-3 space-y-2">
+                      {entries.length === 0 ? (
+                        <p className="text-xs text-center py-6" style={{ color: '#9A9FA6' }}>
+                          No sites blocked yet
+                        </p>
+                      ) : (
+                        entries.map(({ entry, index }) => (
+                          <div
+                            key={index}
+                            className="flex items-start justify-between p-3 rounded-lg border hover:border-blue-200 transition-all"
+                            style={{ borderColor: '#E5E5E5', backgroundColor: '#FAFAFA' }}
                           >
-                            <Trash2 className="h-4 w-4" style={{ color: '#EF4444' }} />
-                          </button>
-                        </div>
-                      ))
-                    )}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-mono truncate font-medium" style={{ color: '#080A0B' }}>
+                                {entry.pattern}
+                              </div>
+                              {entry.reason && (
+                                <div className="text-xs truncate mt-1" style={{ color: '#9A9FA6' }}>
+                                  {entry.reason}
+                                </div>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => deleteEntry(index)}
+                              className="ml-3 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                              title="Delete entry"
+                            >
+                              <Trash2 className="h-4 w-4" style={{ color: '#EF4444' }} />
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
 
                     {/* Add Entry Form */}
                     {addingEntry === categoryInfo.id ? (
-                      <div className="p-3 border rounded-lg" style={{ borderColor: '#E5E7EB' }}>
+                      <div className="p-4 border rounded-xl" style={{ borderColor: '#E5E5E5', backgroundColor: '#FAFAFA' }}>
                         <input
                           type="text"
                           placeholder="*.example.com or example.com/path/*"
                           value={newEntryForm.pattern}
                           onChange={(e) => setNewEntryForm({ ...newEntryForm, pattern: e.target.value })}
-                          className="w-full px-3 py-2 text-sm border rounded-lg mb-2"
-                          style={{ borderColor: '#E5E7EB' }}
+                          className="w-full px-4 py-3 text-sm border rounded-lg mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          style={{ borderColor: '#E5E5E5', fontFamily: "'Breeze Sans'" }}
                         />
                         <input
                           type="text"
                           placeholder="Reason (optional)"
                           value={newEntryForm.reason}
                           onChange={(e) => setNewEntryForm({ ...newEntryForm, reason: e.target.value })}
-                          className="w-full px-3 py-2 text-sm border rounded-lg mb-2"
-                          style={{ borderColor: '#E5E7EB' }}
+                          className="w-full px-4 py-3 text-sm border rounded-lg mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          style={{ borderColor: '#E5E5E5', fontFamily: "'Breeze Sans'" }}
                         />
                         <div className="flex gap-2">
                           <button
                             onClick={() => addEntry(categoryInfo.id)}
-                            className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700"
+                            className="flex-1 px-4 py-3 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow"
+                            style={{ backgroundColor: '#0072de', color: '#FFFFFF' }}
                           >
-                            <Check className="h-4 w-4 inline mr-1" />
+                            <Check className="h-4 w-4 inline mr-2" />
                             Add Site
                           </button>
                           <button
@@ -387,7 +420,8 @@ export function FocusPanel() {
                               setAddingEntry(null)
                               setNewEntryForm({ pattern: "", reason: "" })
                             }}
-                            className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-300"
+                            className="px-4 py-3 rounded-lg text-sm font-semibold transition-all"
+                            style={{ backgroundColor: '#F3F4F6', color: '#080A0B' }}
                           >
                             <X className="h-4 w-4 inline" />
                           </button>
@@ -396,8 +430,8 @@ export function FocusPanel() {
                     ) : (
                       <button
                         onClick={() => setAddingEntry(categoryInfo.id)}
-                        className="w-full p-2 border-2 border-dashed rounded-lg text-xs font-medium transition-colors hover:bg-gray-50"
-                        style={{ borderColor: '#E5E7EB', color: '#6B7280' }}
+                        className="w-full p-3 border-2 border-dashed rounded-lg text-sm font-medium transition-all hover:border-blue-300 hover:bg-blue-50"
+                        style={{ borderColor: '#E5E5E5', color: '#0072de' }}
                       >
                         <Plus className="h-4 w-4 inline mr-1" />
                         Add Site to {categoryInfo.name}
