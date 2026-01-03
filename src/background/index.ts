@@ -195,6 +195,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     addLabel({ name, color })
       .then((newLabel) => {
         sendResponse({ label: newLabel })
+        broadcastLabelUpdate()
       })
       .catch((error) => {
         console.error("ADD_LABEL failed:", error)
@@ -208,6 +209,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     deleteLabel(labelId)
       .then(() => {
         sendResponse({ success: true })
+        broadcastLabelUpdate()
       })
       .catch((error) => {
         console.error("DELETE_LABEL failed:", error)
@@ -797,6 +799,12 @@ export function broadcastSessionUpdate() {
   // Sessions are already persisted to IndexedDB by sessionManager
   // PopulatedState will poll for updates
   console.log("[Background] Session updated, count:", getSessions().length)
+}
+
+export function broadcastLabelUpdate() {
+  // Labels are persisted by labelsStore
+  // PopulatedState will poll for updates
+  console.log("[Background] Labels updated")
 }
 
 function rebuildGraphIfNeeded() {
