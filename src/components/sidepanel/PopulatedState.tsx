@@ -60,6 +60,7 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
   const [results, setResults] = useState<SearchResult[]>([])
   const [currentPage, setCurrentPage] = useState<{ url: string; title: string } | null>(null)
   const [quickAddRequest, setQuickAddRequest] = useState<{ url: string; title: string } | null>(null)
+  const [showCurrentPage, setShowCurrentPage] = useState(false)
 
   // Update activeTab when initialTab changes
   useEffect(() => {
@@ -582,7 +583,6 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
             <GraphPanel />
           </div>
         ) : activeTab === "projects" ? (
-          <div className="p-3">
             <ProjectsPanel 
               projects={projects} 
               sessions={sessions}
@@ -644,7 +644,6 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
               onCompleteQuickAdd={() => setQuickAddRequest(null)}
               onRefreshCurrentPage={fetchCurrentTab}
             />
-          </div>
         ) : activeTab === "focus" ? (
           <FocusPanel />
         ) : (
@@ -1555,6 +1554,27 @@ function ProjectsPanel({
   const [newProjectName, setNewProjectName] = useState("")
   const [newProjectDescription, setNewProjectDescription] = useState("")
   const [creating, setCreating] = useState(false)
+  const [showCurrentPage, setShowCurrentPage] = useState(false)
+
+  const fetchCurrentPageInPanel = () => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const tab = tabs[0]
+      if (tab?.url && !isNewTabUrl(tab.url)) {
+        // Update current page through props or local state if needed
+      }
+    })
+  }
+
+  // Check if sidebar should auto-open the add current page panel
+  useEffect(() => {
+    chrome.storage.local.get("sidepanel-show-add-current-page", (result) => {
+      if (result["sidepanel-show-add-current-page"]) {
+        setShowCurrentPage(true)
+        // Clear the flag after using it
+        chrome.storage.local.remove("sidepanel-show-add-current-page")
+      }
+    })
+  }, [])
 
   const targetPage = useMemo(() => quickAddRequest || currentPage, [quickAddRequest, currentPage])
 
@@ -1690,7 +1710,8 @@ function ProjectsPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      {targetPage && (
+      {/* Current Page Section - Now toggleable */}
+      {showCurrentPage && targetPage && (
         <div
           className="rounded-xl border p-3 bg-white shadow-sm"
           style={{ borderColor: '#E5E5E5' }}>
@@ -1706,14 +1727,14 @@ function ProjectsPanel({
                 {targetPage.url}
               </div>
             </div>
-            {onRefreshCurrentPage && (
-              <button
-                onClick={onRefreshCurrentPage}
-                className="px-2 py-1 text-xs rounded border transition-colors"
-                style={{ borderColor: '#E5E5E5', color: '#0072de', fontFamily: "'Breeze Sans'" }}>
-                Refresh
-              </button>
-            )}
+            <button
+              onClick={() => setShowCurrentPage(false)}
+              className="p-1 hover:bg-gray-100 rounded transition-colors"
+              title="Close">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: '#9A9FA6' }}>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -1787,33 +1808,46 @@ function ProjectsPanel({
         </div>
       )}
 
-      {/* Header with Create Project Button */}
-      <div className="flex items-center justify-between">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-lg font-semibold" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
-            Projects
-          </h2>
-          <p className="text-xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
-            {projects.length === 0 ? "No projects yet" : `${projects.length} project${projects.length === 1 ? '' : 's'}`}
-          </p>
+      {/* Header with Action Buttons - Sticky */}
+      <div className="sticky top-0 z-10 flex items-center justify-between p-4 bg-white border-b" style={{ borderColor: '#E5E5E5' }}>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              setShowCurrentPage(!showCurrentPage)
+              if (!showCurrentPage && !currentPage) {
+                fetchCurrentPageInPanel()
+              }
+            }}
+            disabled={!currentPage && !showCurrentPage}
+            className="px-2 py-1 text-xs rounded-lg text-white transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            style={{ backgroundColor: showCurrentPage ? '#9A9FA6' : '#0072de', fontFamily: "'Breeze Sans'" }}>
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {showCurrentPage ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              )}
+            </svg>
+            {showCurrentPage ? 'Close' : 'Add Current Site'}
+          </button>
+          <button
+            onClick={() => {
+              setShowCreateCard(!showCreateCard)
+              setNewProjectName("")
+              setNewProjectDescription("")
+            }}
+            className="px-2 py-1 text-xs rounded-lg text-white transition-colors flex items-center gap-1.5"
+            style={{ backgroundColor: showCreateCard ? '#9A9FA6' : '#0072de', fontFamily: "'Breeze Sans'" }}>
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {showCreateCard ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              )}
+            </svg>
+            {showCreateCard ? 'Cancel' : 'New Project'}
+          </button>
         </div>
-        <button
-          onClick={() => {
-            setShowCreateCard(!showCreateCard)
-            setNewProjectName("")
-            setNewProjectDescription("")
-          }}
-          className="px-3 py-2 text-sm rounded text-white transition-colors flex items-center gap-2"
-          style={{ backgroundColor: showCreateCard ? '#9A9FA6' : '#0072de', fontFamily: "'Breeze Sans'" }}>
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            {showCreateCard ? (
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            ) : (
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            )}
-          </svg>
-          {showCreateCard ? 'Cancel' : 'New Project'}
-        </button>
       </div>
 
       {/* Create Project Card */}
@@ -2055,7 +2089,7 @@ function ProjectCard({
 
   return (
     <div
-      className="flex flex-col rounded-xl p-4 cursor-pointer transition-all hover:shadow-md"
+      className="flex flex-col rounded-xl p-3 cursor-pointer transition-all hover:shadow-md"
       style={{ 
         backgroundColor: '#FAFAFA',
         border: '1px solid #E5E5E5'
@@ -2063,9 +2097,7 @@ function ProjectCard({
       onClick={onToggle}>
       
       {/* Project Header - Compact Layout */}
-      <div className="flex items-start gap-3 mb-3">
-        <Folder className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: '#0074FB' }} />
-        
+      <div className="flex items-start gap-3 mb-2">
         <div className="flex-1 min-w-0">
           {/* Title Row */}
           <div className="flex items-center gap-2 mb-1">
@@ -2084,105 +2116,41 @@ function ProjectCard({
                 autoFocus
               />
             ) : (
-              <h3 className="text-base font-semibold flex-1 min-w-0" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
-                {project.name}
-              </h3>
-            )}
-            
-            {/* Auto-detected Badge */}
-            {!isEditing && project.autoDetected && (
-              <span
-                className="px-2 py-0.5 rounded text-2xs font-medium whitespace-nowrap flex-shrink-0"
-                style={{ 
-                  backgroundColor: '#F3E8FF', 
-                  color: '#6B21A8',
-                  fontSize: '10px',
-                  fontFamily: "'Breeze Sans'"
-                }}>
-                auto
-              </span>
-            )}
-          </div>
-          
-          {/* Metadata Row */}
-          <div className="flex flex-wrap items-center gap-3 text-xs mb-2" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
-            <div className="flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
-              <span>{duration} day{duration === 1 ? '' : 's'}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              <span>{project.sessionIds.length} session{project.sessionIds.length === 1 ? '' : 's'}</span>
-            </div>
-            {project.sites && project.sites.length > 0 && (
-              <div className="flex items-center gap-1">
-                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                </svg>
-                <span>{project.sites.length} site{project.sites.length === 1 ? '' : 's'}</span>
-              </div>
+              <>
+                <h3 className="text-base font-semibold flex-1 min-w-0" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+                  {project.name}
+                </h3>
+                
+                {/* Snooze State Indicator - Inline */}
+                {project.reminder?.snoozedUntil && Date.now() < project.reminder.snoozedUntil && (
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded" style={{ backgroundColor: '#F5F5F5' }}>
+                    <Clock className="h-3 w-3" style={{ color: '#9A9FA6' }} />
+                    <span className="text-2xs whitespace-nowrap" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
+                      {Math.ceil((project.reminder.snoozedUntil - Date.now()) / 1000 / 60)} min
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        chrome.runtime.sendMessage({
+                          type: "DISMISS_SNOOZE",
+                          payload: { projectId: project.id }
+                        }).catch(err => console.error("Failed to dismiss snooze:", err))
+                      }}
+                      className="hover:bg-gray-200 rounded p-0.5 transition-colors"
+                      title="Dismiss snooze">
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: '#9A9FA6' }}>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
-
-          {/* Snooze State Indicator */}
-          {project.reminder?.snoozedUntil && Date.now() < project.reminder.snoozedUntil && (
-            <div className="mb-2 p-2 rounded flex items-center justify-between" style={{ backgroundColor: 'rgba(255, 193, 7, 0.1)', border: '1px solid rgba(255, 193, 7, 0.3)' }}>
-              <div className="flex items-center gap-2 flex-1" style={{ fontSize: '12px', fontFamily: "'Breeze Sans'" }}>
-                <Clock className="h-4 w-4" style={{ color: '#FFC107' }} />
-                <span style={{ color: '#FF8C00' }}>
-                  ⏸️ Snoozed for {Math.ceil((project.reminder.snoozedUntil - Date.now()) / 1000 / 60)} min
-                </span>
-              </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  // Dismiss snooze by clearing the flag and resetting count
-                  chrome.runtime.sendMessage({
-                    type: "DISMISS_SNOOZE",
-                    payload: { projectId: project.id }
-                  }).catch(err => console.error("Failed to dismiss snooze:", err))
-                }}
-                className="px-2 py-1 rounded text-xs font-medium flex-shrink-0"
-                style={{ backgroundColor: '#FFC107', color: '#000' }}>
-                Dismiss
-              </button>
-            </div>
-          )}
-
-          {/* Keywords */}
-          {project.keywords.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {project.keywords.slice(0, 5).map((keyword, idx) => (
-                <span
-                  key={idx}
-                  className="px-2 py-0.5 rounded text-2xs"
-                  style={{ 
-                    backgroundColor: '#E8E8E8', 
-                    color: '#555',
-                    fontSize: '10px',
-                    fontFamily: "'Breeze Sans'"
-                  }}>
-                  {keyword}
-                </span>
-              ))}
-              {project.keywords.length > 5 && (
-                <span
-                  className="px-2 py-0.5 rounded text-2xs"
-                  style={{ 
-                    backgroundColor: '#E8E8E8', 
-                    color: '#555',
-                    fontSize: '10px',
-                    fontFamily: "'Breeze Sans'"
-                  }}>
-                  +{project.keywords.length - 5}
-                </span>
-              )}
-            </div>
-          )}
         </div>
 
-        {/* Actions Column */}
-        <div className="flex flex-col gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+        {/* Actions Row - Horizontal */}
+        <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           {isEditing ? (
             <>
               <button
@@ -2205,7 +2173,7 @@ function ProjectCard({
                   e.stopPropagation()
                   onStartEdit()
                 }}
-                className="hover:bg-gray-200 rounded p-1.5 transition-colors"
+                className="hover:bg-white rounded p-1.5 transition-colors"
                 title="Edit project">
                 <Edit2 className="h-4 w-4" style={{ color: '#9A9FA6' }} />
               </button>
@@ -2232,7 +2200,7 @@ function ProjectCard({
                       })
                     }
                   }}
-                  className="hover:bg-gray-200 rounded p-1.5 transition-colors"
+                  className="hover:bg-white rounded p-1.5 transition-colors"
                   title="Open all sites">
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: '#9A9FA6' }}>
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -2245,7 +2213,7 @@ function ProjectCard({
                   e.stopPropagation()
                   setShowReminderDialog(true)
                 }}
-                className="hover:bg-gray-200 rounded p-1.5 transition-colors relative"
+                className="hover:bg-white rounded p-1.5 transition-colors relative"
                 title={project.reminder?.enabled ? "Reminder active" : "Set reminder"}>
                 {project.reminder?.enabled ? (
                   <Bell className="h-4 w-4" style={{ color: '#0074FB' }} />
@@ -2347,18 +2315,6 @@ function ProjectCard({
             .slice(0, isExpanded ? project.sites.length : 3)
             .map((site, index) => {
               const domain = new URL(site.url.startsWith('http') ? site.url : `https://${site.url}`).hostname
-              const timeAgo = (() => {
-                const now = Date.now()
-                const diff = now - site.addedAt
-                const minutes = Math.floor(diff / 60000)
-                const hours = Math.floor(diff / 3600000)
-                const days = Math.floor(diff / 86400000)
-                
-                if (days > 0) return `${days}d ago`
-                if (hours > 0) return `${hours}h ago`
-                if (minutes > 0) return `${minutes}m ago`
-                return 'just now'
-              })()
 
               return (
                 <div
@@ -2371,37 +2327,18 @@ function ProjectCard({
                     onClick={(e) => {
                       e.stopPropagation()
                       const fullUrl = site.url.startsWith('http') ? site.url : `https://${site.url}`
+                      chrome.runtime.sendMessage({ type: 'SITE_OPENED_FROM_SIDEPANEL', payload: { url: fullUrl } })
                       chrome.tabs.create({ url: fullUrl })
                     }}
                     title={`Open ${site.url}`}>
                     <p className="text-xs truncate mb-0.5" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'", fontWeight: 500 }}>
                       {site.title}
                     </p>
-                    <p className="text-2xs truncate flex items-center gap-1.5" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
-                      <span>{domain}</span>
-                      <span>•</span>
-                      <span>{timeAgo}</span>
-                      {site.addedBy === 'auto' && (
-                        <>
-                          <span>•</span>
-                          <span style={{ color: '#667eea' }}>auto</span>
-                        </>
-                      )}
+                    <p className="text-2xs truncate" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
+                      {domain}
                     </p>
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        const fullUrl = site.url.startsWith('http') ? site.url : `https://${site.url}`
-                        chrome.tabs.create({ url: fullUrl })
-                      }}
-                      className="p-1 hover:bg-gray-200 rounded opacity-0 group-hover:opacity-100 transition-all"
-                      title="Open site">
-                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: '#9A9FA6' }}>
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </button>
                     {onRemoveSite && (
                       <button
                         onClick={(e) => {

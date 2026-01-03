@@ -1,5 +1,13 @@
 /**
- * Suggests adding current site to existing projects based on similarity
+ * LEGACY: Project suggestions based on similarity
+ * 
+ * ⚠️ DISABLED - Too noisy, replaced with main site detection
+ * 
+ * This module previously suggested adding current sites to existing projects
+ * based on title/keyword similarity scoring.
+ * 
+ * Replaced by simpler main site detection in page-event-listeners.ts
+ * Kept for reference only.
  */
 
 import type { PageEvent } from "~/types/page-event"

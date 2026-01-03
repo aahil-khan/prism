@@ -298,9 +298,10 @@ export async function openProjectInTabGroup(projectId: string): Promise<void> {
       // Open missing sites
       const tabsToAdd: number[] = []
       for (const site of project.sites) {
-        if (!openUrls.has(site.url)) {
+        const siteUrl = site.url.startsWith('http') ? site.url : `https://${site.url}`
+        if (!openUrls.has(site.url) && !openUrls.has(siteUrl)) {
           const newTab = await chrome.tabs.create({
-            url: site.url,
+            url: siteUrl,
             active: false,
             windowId: currentWindow.id
           })
@@ -333,8 +334,9 @@ export async function openProjectInTabGroup(projectId: string): Promise<void> {
       
       const tabIds: number[] = []
       for (const site of project.sites) {
+        const siteUrl = site.url.startsWith('http') ? site.url : `https://${site.url}`
         const newTab = await chrome.tabs.create({
-          url: site.url,
+          url: siteUrl,
           active: false,
           windowId: currentWindow.id
         })
