@@ -27,7 +27,7 @@ export function WelcomeModal({ open, onOpenChange, onAccept }: WelcomeModalProps
           <img src={chrome.runtime.getURL('assets/konta_logo.svg')} alt="Konta" className="w-12 h-12" />
           
           <DialogTitle className="text-2xl font-normal text-center" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
-            Welcome to Aegis!
+            Welcome to Konta!
           </DialogTitle>
         
           <p className="text-center text-sm leading-snug" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>

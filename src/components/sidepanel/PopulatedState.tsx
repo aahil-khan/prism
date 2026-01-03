@@ -1913,7 +1913,7 @@ function ProjectsPanel({
       {/* Header with Create Project Button */}
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-1">
-          <h2 className="text-lg font-semibold" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+          <h2 className="text-lg font-normal" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
             Projects
           </h2>
           <p className="text-xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
@@ -1946,7 +1946,7 @@ function ProjectsPanel({
           style={{ borderColor: '#0072de', borderWidth: '2px' }}>
           <div className="flex items-center gap-2 mb-3">
             <Folder className="h-5 w-5" style={{ color: '#0072de' }} />
-            <h3 className="text-base font-semibold" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+            <h3 className="text-base font-normal" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
               Create New Project
             </h3>
           </div>
@@ -2150,7 +2150,7 @@ function ProjectCard({
                 value={editName}
                 onChange={(e) => onEditNameChange(e.target.value)}
                 onClick={(e) => e.stopPropagation()}
-                className="flex-1 min-w-0 px-2 py-1 text-base font-semibold rounded border"
+                className="flex-1 min-w-0 px-2 py-1 text-base font-normal rounded border"
                 style={{ 
                   color: 'var(--dark)', 
                   fontFamily: "'Breeze Sans'",
@@ -2159,7 +2159,7 @@ function ProjectCard({
                 autoFocus
               />
             ) : (
-              <h3 className="text-base font-semibold flex-1 min-w-0" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+              <h3 className="text-base font-normal flex-1 min-w-0" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
                 {project.name}
               </h3>
             )}
@@ -2372,7 +2372,7 @@ function ProjectCard({
       {/* Sites List (shown when expanded) */}
       {isExpanded && project.sites && project.sites.length > 0 && (
         <div className="flex flex-col gap-1.5 mb-3 pb-3 border-b" style={{ borderColor: '#E5E5E5' }}>
-          <h4 className="text-xs font-semibold mb-1 flex items-center gap-1.5" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+          <h4 className="text-xs font-normal mb-1 flex items-center gap-1.5" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
             </svg>

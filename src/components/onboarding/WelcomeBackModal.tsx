@@ -27,7 +27,7 @@ export function WelcomeBackModal({ open, onOpenChange, onOpenPopulated }: Welcom
           <img src={chrome.runtime.getURL('assets/konta_logo.svg')} alt="Konta" className="w-12 h-12 -mt-2" />
           
           <DialogTitle className="text-2xl font-normal text-center mt-4" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
-            Welcome back to Aegis!
+            Welcome back to Konta!
           </DialogTitle>
         
           <p className="text-center text-sm leading-snug mt-4" style={{ color: '#000000', fontFamily: "'Breeze Sans'" }}>
