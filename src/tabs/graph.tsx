@@ -95,7 +95,8 @@ export default function GraphFullPage() {
     loadGraph()
     const interval = setInterval(loadGraph, 30000)
     return () => clearInterval(interval)
-  }, [loadGraph])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Preload favicons when graph updates
   useEffect(() => {

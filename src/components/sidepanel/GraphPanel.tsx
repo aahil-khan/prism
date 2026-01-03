@@ -131,7 +131,8 @@ export function GraphPanel() {
   useEffect(() => {
     loadGraph()
     // Only load once on mount, no polling
-  }, [loadGraph])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Preload favicons when graph updates
   useEffect(() => {
