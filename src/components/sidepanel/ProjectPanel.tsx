@@ -217,226 +217,205 @@ function ProjectsPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Current Page Section - Now toggleable */}
+      {/* Add Current Site Modal - Fixed Overlay */}
       {showCurrentPage && targetPage && (
-        <div
-          className="rounded-xl border p-3 bg-white shadow-sm"
-          style={{ borderColor: '#E5E5E5' }}>
-          <div className="flex items-start justify-between gap-3 mb-2">
-            <div className="flex-1 min-w-0">
-              <div className="text-2xs mb-1" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
-                Current page
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+          <div
+            className="rounded-lg p-5 w-72 shadow-lg bg-white"
+            style={{ borderColor: '#DDD', borderWidth: '1px' }}>
+            <h3 className="text-base font-normal mb-4" style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
+              Add Current Site
+            </h3>
+            
+            <div className="flex flex-col gap-3">
+              {/* Site Info */}
+              <div className="bg-gray-50 rounded-lg p-3" style={{ borderColor: '#E5E5E5', borderWidth: '1px' }}>
+                <div className="text-xs font-normal mb-2" style={{ color: '#666', fontFamily: "'Breeze Sans'" }}>
+                  {targetPage.title || targetPage.url}
+                </div>
+                <div className="text-2xs truncate" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
+                  {targetPage.url}
+                </div>
               </div>
-              <div className="text-sm font-semibold truncate" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
-                {targetPage.title || targetPage.url}
-              </div>
-              <div className="text-2xs truncate" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
-                {targetPage.url}
-              </div>
-            </div>
-            <button
-              onClick={() => setShowCurrentPage(false)}
-              className="p-1 hover:bg-gray-100 rounded transition-colors"
-              title="Close">
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: '#9A9FA6' }}>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {(() => {
-              // Filter out projects that already have this site
-              const availableProjects = targetPage 
-                ? projects.filter(p => !p.sites.some(s => s.url === targetPage.url))
-                : projects
-
-              return (
-                <>
+              {/* Project Selection or Create Message */}
+              {projects.length === 0 ? (
+                <div className="text-xs text-center py-4" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
+                  Create a project first to add this site
+                </div>
+              ) : (
+                <div>
+                  <label className="text-xs font-normal block mb-2" style={{ color: '#666', fontFamily: "'Breeze Sans'" }}>
+                    Select Project
+                  </label>
                   <select
-                    value={selectedProjectId && availableProjects.some(p => p.id === selectedProjectId) ? selectedProjectId : (availableProjects[0]?.id || "")}
+                    value={selectedProjectId && projects.some(p => p.id === selectedProjectId) ? selectedProjectId : (projects[0]?.id || "")}
                     onChange={(e) => setSelectedProjectId(e.target.value)}
-                    className="flex-1 min-w-[180px] px-3 py-2 text-sm rounded border"
-                    style={{ borderColor: '#E5E5E5', color: '#080A0B', fontFamily: "'Breeze Sans'" }}
-                    disabled={availableProjects.length === 0}>
-                    {availableProjects.map((project) => (
+                    className="w-full px-3 py-2 text-sm rounded-lg border outline-none focus:border-blue-500"
+                    style={{ borderColor: '#DDD', color: '#080A0B', fontFamily: "'Breeze Sans'", backgroundColor: '#FFFFFF' }}>
+                    {projects.map((project) => (
                       <option key={project.id} value={project.id}>
                         {project.name}
                       </option>
                     ))}
                   </select>
-                  <button
-                    onClick={handleAddCurrentPage}
-                    disabled={!selectedProjectId || adding || availableProjects.length === 0}
-                    className="px-3 py-2 text-sm rounded text-white transition-colors disabled:opacity-60"
-                    style={{ backgroundColor: '#0072de', fontFamily: "'Breeze Sans'" }}>
-                    {adding ? 'Adding...' : 'Add to project'}
-                  </button>
-                </>
-              )
-            })()}
-          </div>
-
-          {(() => {
-            const availableProjects = targetPage 
-              ? projects.filter(p => !p.sites.some(s => s.url === targetPage.url))
-              : projects
-
-            if (availableProjects.length === 0 && projects.length > 0) {
-              return (
-                <div className="text-2xs mt-2" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
-                  This page is already in all your projects.
                 </div>
-              )
-            }
+              )}
 
-            if (availableProjects.length === 0) {
-              return (
-                <div className="text-2xs mt-2" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
-                  Create or detect a project to add this page.
+              {/* Buttons */}
+              <div className="flex gap-2 justify-end mt-2">
+                <button
+                  onClick={() => setShowCurrentPage(false)}
+                  className="px-4 py-1.5 text-xs rounded-lg transition-colors"
+                  style={{ 
+                    backgroundColor: '#F5F5F5',
+                    color: '#666',
+                    fontFamily: "'Breeze Sans'"
+                  }}>
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddCurrentPage}
+                  disabled={!selectedProjectId || adding || projects.length === 0}
+                  className="px-4 py-1.5 text-xs rounded-lg text-white transition-colors disabled:opacity-50"
+                  style={{ 
+                    backgroundColor: (selectedProjectId && !adding && projects.length > 0) ? '#0072de' : '#CCC',
+                    fontFamily: "'Breeze Sans'",
+                  }}>
+                  {adding ? 'Adding...' : 'Add to Project'}
+                </button>
+              </div>
+
+              {/* Status Messages */}
+              {addMessage && (
+                <div
+                  className="text-2xs text-center"
+                  style={{
+                    color: addMessage.type === 'success' ? '#0f9d58' : '#b00020',
+                    fontFamily: "'Breeze Sans'",
+                    fontSize: '10px'
+                  }}>
+                  {addMessage.text}
                 </div>
-              )
-            }
-
-            return null
-          })()}
-
-          {addMessage && (
-            <div
-              className="text-2xs mt-2"
-              style={{
-                color: addMessage.type === 'success' ? '#0f9d58' : '#b00020',
-                fontFamily: "'Breeze Sans'",
-                fontSize: '10px'
-              }}>
-              {addMessage.text}
+              )}
             </div>
-          )}
+          </div>
         </div>
       )}
 
       {/* Header with Action Buttons - Sticky */}
-      <div className="sticky top-0 z-10 flex items-center justify-between p-4 bg-white border-b" style={{ borderColor: '#E5E5E5' }}>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              setShowCurrentPage(!showCurrentPage)
-              if (!showCurrentPage && !currentPage) {
-                fetchCurrentPageInPanel()
-              }
-            }}
-            disabled={!currentPage && !showCurrentPage}
-            className="px-2 py-1 text-xs rounded-lg text-white transition-colors flex items-center gap-1.5 disabled:opacity-50"
-            style={{ backgroundColor: showCurrentPage ? '#9A9FA6' : '#0072de', fontFamily: "'Breeze Sans'" }}>
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              {showCurrentPage ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              )}
-            </svg>
-            {showCurrentPage ? 'Close' : 'Add Current Site'}
-          </button>
-          <button
-            onClick={() => {
-              setShowCreateCard(!showCreateCard)
-              setNewProjectName("")
-              setNewProjectDescription("")
-            }}
-            className="px-2 py-1 text-xs rounded-lg text-white transition-colors flex items-center gap-1.5"
-            style={{ backgroundColor: showCreateCard ? '#9A9FA6' : '#0072de', fontFamily: "'Breeze Sans'" }}>
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              {showCreateCard ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              )}
-            </svg>
-            {showCreateCard ? 'Cancel' : 'New Project'}
-          </button>
-        </div>
+      <div className="sticky top-0 z-10 flex items-center gap-3 p-4 bg-white border-b" style={{ borderColor: '#E5E5E5' }}>
+        <button
+          onClick={() => {
+            setShowCreateCard(!showCreateCard)
+            setNewProjectName("")
+            setNewProjectDescription("")
+          }}
+          className="px-4 py-1.5 text-xs rounded-lg text-white transition-colors flex items-center gap-1.5 font-medium"
+          style={{ backgroundColor: showCreateCard ? '#9A9FA6' : '#0072de', fontFamily: "'Breeze Sans'" }}>
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {showCreateCard ? (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            ) : (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            )}
+          </svg>
+          New Project
+        </button>
+        <button
+          onClick={() => {
+            setShowCurrentPage(!showCurrentPage)
+            if (!showCurrentPage && !currentPage) {
+              fetchCurrentPageInPanel()
+            }
+          }}
+          disabled={!currentPage && !showCurrentPage}
+          className="px-4 py-1.5 text-xs rounded-lg text-white transition-colors flex items-center gap-1.5 font-medium disabled:opacity-50"
+          style={{ backgroundColor: '#0072de', fontFamily: "'Breeze Sans'" }}>
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Add Current Site
+        </button>
       </div>
 
-      {/* Create Project Card */}
+      {/* Create Project Modal - Fixed Overlay */}
       {showCreateCard && (
-        <div
-          className="rounded-xl border p-4 bg-white shadow-sm"
-          style={{ borderColor: '#0072de', borderWidth: '2px' }}>
-          <div className="flex items-center gap-2 mb-3">
-            <Folder className="h-5 w-5" style={{ color: '#0072de' }} />
-            <h3 className="text-base font-semibold" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+          <div
+            className="rounded-lg p-5 w-72 shadow-lg bg-white"
+            style={{ borderColor: '#DDD', borderWidth: '1px' }}>
+            <h3 className="text-base font-normal mb-4" style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
               Create New Project
             </h3>
-          </div>
-          
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium" style={{ color: '#555', fontFamily: "'Breeze Sans'" }}>
-                Project Name <span style={{ color: '#EF4444' }}>*</span>
-              </label>
-              <input
-                type="text"
-                value={newProjectName}
-                onChange={(e) => setNewProjectName(e.target.value)}
-                placeholder="e.g., Machine Learning Research"
-                className="w-full px-3 py-2 text-sm rounded border"
-                style={{ 
-                  fontFamily: "'Breeze Sans'",
-                  borderColor: '#E5E5E5',
-                  backgroundColor: '#FFFFFF',
-                  color: '#080A0B'
-                }}
-                autoFocus
-              />
-            </div>
             
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium" style={{ color: '#555', fontFamily: "'Breeze Sans'" }}>
-                Description (Optional)
-              </label>
-              <textarea
-                value={newProjectDescription}
-                onChange={(e) => setNewProjectDescription(e.target.value)}
-                placeholder="Add notes about this project..."
-                className="w-full px-3 py-2 text-sm rounded border resize-none"
-                style={{ 
-                  fontFamily: "'Breeze Sans'",
-                  minHeight: '80px',
-                  borderColor: '#E5E5E5',
-                  backgroundColor: '#FFFFFF',
-                  color: '#080A0B'
-                }}
-              />
-            </div>
-            
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => {
-                  setShowCreateCard(false)
-                  setNewProjectName("")
-                  setNewProjectDescription("")
-                }}
-                disabled={creating}
-                className="px-3 py-2 text-sm rounded border transition-colors"
-                style={{ 
-                  borderColor: '#E5E5E5',
-                  color: '#080A0B',
-                  fontFamily: "'Breeze Sans'",
-                  backgroundColor: '#FFFFFF'
-                }}>
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateProject}
-                disabled={!newProjectName.trim() || creating}
-                className="px-3 py-2 text-sm rounded transition-colors disabled:opacity-50"
-                style={{ 
-                  backgroundColor: '#0072de',
-                  color: 'white',
-                  fontFamily: "'Breeze Sans'"
-                }}>
-                {creating ? 'Creating...' : 'Create Project'}
-              </button>
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="text-xs font-normal" style={{ color: '#666', fontFamily: "'Breeze Sans'" }}>
+                  Project Name <span style={{ color: '#EF4444' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  placeholder=""
+                  className="w-full mt-1 px-3 py-2 text-sm rounded-lg border outline-none focus:border-blue-500"
+                  style={{ 
+                    fontFamily: "'Breeze Sans'",
+                    borderColor: '#DDD',
+                    backgroundColor: '#FFFFFF',
+                    color: '#080A0B'
+                  }}
+                  autoFocus
+                />
+              </div>
+              
+              <div>
+                <label className="text-xs font-normal" style={{ color: '#666', fontFamily: "'Breeze Sans'" }}>
+                  Description (Optional)
+                </label>
+                <textarea
+                  value={newProjectDescription}
+                  onChange={(e) => setNewProjectDescription(e.target.value)}
+                  placeholder=""
+                  className="w-full mt-1 px-3 py-2 text-sm rounded-lg border outline-none focus:border-blue-500 resize-none"
+                  style={{ 
+                    fontFamily: "'Breeze Sans'",
+                    minHeight: '80px',
+                    borderColor: '#DDD',
+                    backgroundColor: '#FFFFFF',
+                    color: '#080A0B'
+                  }}
+                />
+              </div>
+              
+              <div className="flex gap-2 justify-end mt-2">
+                <button
+                  onClick={() => {
+                    setShowCreateCard(false)
+                    setNewProjectName("")
+                    setNewProjectDescription("")
+                  }}
+                  disabled={creating}
+                  className="px-4 py-1.5 text-xs rounded-lg transition-colors"
+                  style={{ 
+                    backgroundColor: '#F5F5F5',
+                    color: '#666',
+                    fontFamily: "'Breeze Sans'"
+                  }}>
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateProject}
+                  disabled={!newProjectName.trim() || creating}
+                  className="px-4 py-1.5 text-xs rounded-lg text-white transition-colors disabled:opacity-50"
+                  style={{ 
+                    backgroundColor: newProjectName.trim() ? '#0072de' : '#CCC',
+                    fontFamily: "'Breeze Sans'",
+                  }}>
+                  {creating ? 'Creating...' : 'Create'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -624,7 +603,7 @@ function ProjectCard({
               />
             ) : (
               <>
-                <h3 className="text-base font-semibold flex-1 min-w-0" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+                <h3 className="text-base font-normal flex-1 min-w-0" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
                   {project.name}
                 </h3>
                 
@@ -829,6 +808,14 @@ function ProjectCard({
                   className="flex items-start gap-2 p-2 rounded hover:bg-gray-50 transition-colors group"
                   style={{ backgroundColor: '#FAFAFA', border: '1px solid #E5E5E5' }}
                   onClick={(e) => e.stopPropagation()}>
+                  <img
+                    src={`https://www.google.com/s2/favicons?sz=24&domain=${domain}`}
+                    alt={site.title}
+                    className="w-6 h-6 rounded flex-shrink-0 mt-0.5"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none'
+                    }}
+                  />
                   <div 
                     className="flex-1 min-w-0 cursor-pointer"
                     onClick={(e) => {
@@ -904,24 +891,19 @@ function ProjectCard({
             }
           }}>
           <div
-            className="bg-white rounded-xl p-6 max-w-md w-full mx-4"
+            className="bg-white rounded-xl p-4 max-w-sm w-full mx-4"
             onClick={(e) => e.stopPropagation()}
             style={{ border: '1px solid #E5E5E5', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+            <div className="mb-3">
+              <h3 className="text-base font-normal" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
                 Set Reminder
               </h3>
-              <button
-                onClick={() => setShowReminderDialog(false)}
-                className="p-1 hover:bg-gray-100 rounded transition-colors">
-                <X className="h-5 w-5" style={{ color: '#9A9FA6' }} />
-              </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3">
               {/* Enable Toggle */}
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+                <span className="text-xs font-normal" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
                   Enable Reminder
                 </span>
                 <button
@@ -937,7 +919,7 @@ function ProjectCard({
                 <>
                   {/* Schedule Type */}
                   <div>
-                    <label className="block text-sm font-medium mb-2" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+                    <label className="block text-xs font-normal mb-2" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
                       Schedule
                     </label>
                     <div className="flex gap-2">
@@ -945,7 +927,7 @@ function ProjectCard({
                         <button
                           key={type}
                           onClick={() => setReminderForm({ ...reminderForm, type })}
-                          className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${reminderForm.type === type ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                          className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${reminderForm.type === type ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
                           style={{ fontFamily: "'Breeze Sans'" }}>
                           {type.charAt(0).toUpperCase() + type.slice(1)}
                         </button>
@@ -955,22 +937,87 @@ function ProjectCard({
 
                   {/* Time Picker */}
                   <div>
-                    <label className="block text-sm font-medium mb-2" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+                    <label className="block text-xs font-normal mb-2" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
                       Time
                     </label>
-                    <input
-                      type="time"
-                      value={reminderForm.time}
-                      onChange={(e) => setReminderForm({ ...reminderForm, time: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg border text-sm"
-                      style={{ borderColor: '#E5E5E5', fontFamily: "'Breeze Sans'" }}
-                    />
+                    <div className="flex gap-2 items-top">
+                      {/* Hours */}
+                      <div className="flex-1 text-center">
+                        <input
+                          type="number"
+                          min="1"
+                          max="12"
+                          value={parseInt(reminderForm.time.split(':')[0]) % 12 === 0 ? 12 : parseInt(reminderForm.time.split(':')[0]) % 12}
+                          onChange={(e) => {
+                            let hours = Math.min(12, Math.max(1, parseInt(e.target.value) || 1))
+                            const isPM = parseInt(reminderForm.time.split(':')[0]) >= 12
+                            const militaryHours = (isPM && hours !== 12 ? hours + 12 : hours === 12 && !isPM ? 0 : hours).toString().padStart(2, '0')
+                            const minutes = reminderForm.time.split(':')[1]
+                            setReminderForm({ ...reminderForm, time: `${militaryHours}:${minutes}` })
+                          }}
+                          className="w-full px-2 py-2 rounded-lg border text-center text-sm font-medium"
+                          style={{ borderColor: '#E5E5E5', fontFamily: "'Breeze Sans'" }}
+                        />
+                        <p className="text-xs mt-1" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>Hours</p>
+                      </div>
+
+                      {/* Separator */}
+                      <span className="text-lg font-normal" style={{ color: '#9A9FA6' }}>:</span>
+
+                      {/* Minutes */}
+                      <div className="flex-1 text-center">
+                        <input
+                          type="number"
+                          min="0"
+                          max="59"
+                          value={reminderForm.time.split(':')[1]}
+                          onChange={(e) => {
+                            const minutes = Math.min(59, Math.max(0, parseInt(e.target.value) || 0)).toString().padStart(2, '0')
+                            const hours = reminderForm.time.split(':')[0]
+                            setReminderForm({ ...reminderForm, time: `${hours}:${minutes}` })
+                          }}
+                          className="w-full px-2 py-2 rounded-lg border text-center text-sm font-medium"
+                          style={{ borderColor: '#E5E5E5', fontFamily: "'Breeze Sans'" }}
+                        />
+                        <p className="text-xs mt-1" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>Minutes</p>
+                      </div>
+
+                      {/* AM/PM Toggle */}
+                      <div className="flex-1 flex flex-col h-10 gap-0">
+                        {['AM', 'PM'].map((period) => {
+                          const isAM = parseInt(reminderForm.time.split(':')[0]) < 12
+                          const isPeriodActive = (period === 'AM' && isAM) || (period === 'PM' && !isAM)
+                          return (
+                            <button
+                              key={period}
+                              onClick={() => {
+                                const [hours, minutes] = reminderForm.time.split(':')
+                                const currentHours = parseInt(hours)
+                                let newHours = currentHours
+                                if (period === 'AM' && currentHours >= 12) {
+                                  newHours = currentHours === 12 ? 0 : currentHours - 12
+                                } else if (period === 'PM' && currentHours < 12) {
+                                  newHours = currentHours === 0 ? 12 : currentHours + 12
+                                }
+                                setReminderForm({ ...reminderForm, time: `${newHours.toString().padStart(2, '0')}:${minutes}` })
+                              }}
+                              className={`flex-1 px-2 rounded text-xs font-medium transition-colors w-full ${isPeriodActive ? 'text-white' : 'bg-gray-100 text-gray-700'}`}
+                              style={{
+                                backgroundColor: isPeriodActive ? '#0074FB' : '#F5F5F5',
+                                fontFamily: "'Breeze Sans'"
+                              }}>
+                              {period}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Date Picker (for once) */}
                   {reminderForm.type === 'once' && (
                     <div>
-                      <label className="block text-sm font-medium mb-2" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+                      <label className="block text-xs font-normal mb-2" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
                         Date
                       </label>
                       <input
@@ -987,7 +1034,7 @@ function ProjectCard({
                   {/* Days of Week (for weekly) */}
                   {reminderForm.type === 'weekly' && (
                     <div>
-                      <label className="block text-sm font-medium mb-2" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+                      <label className="block text-xs font-normal mb-2" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
                         Days of Week
                       </label>
                       <div className="flex gap-2">
@@ -1018,13 +1065,13 @@ function ProjectCard({
               <div className="flex gap-2 pt-2">
                 <button
                   onClick={() => setShowReminderDialog(false)}
-                  className="flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                  className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
                   style={{ backgroundColor: '#E5E5E5', color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
                   Cancel
                 </button>
                 <button
                   onClick={handleSaveReminder}
-                  className="flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                  className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
                   style={{ backgroundColor: '#0074FB', color: 'white', fontFamily: "'Breeze Sans'" }}>
                   Save
                 </button>

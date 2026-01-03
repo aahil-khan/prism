@@ -149,27 +149,21 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
     
     // Labels scroll listeners
     if (labelsScrollContainer) {
-      const handleWheel = (e: WheelEvent) => {
-        e.preventDefault()
-        labelsScrollContainer.scrollLeft += (e.deltaY !== 0 ? e.deltaY : e.deltaX) * 5
-        
-        // Use requestAnimationFrame for state update
+      const handleScroll = () => {
         if (scrollCheckRafId) cancelAnimationFrame(scrollCheckRafId)
         scrollCheckRafId = requestAnimationFrame(() => {
           checkLabelsScroll()
         })
       }
       
-      labelsScrollContainer.addEventListener('scroll', checkLabelsScroll, { passive: true })
-      labelsScrollContainer.addEventListener('wheel', handleWheel, { passive: false })
+      labelsScrollContainer.addEventListener('scroll', handleScroll, { passive: true })
       
       // Cleanup for this effect
       return () => {
         if (tabScrollContainer) {
           tabScrollContainer.removeEventListener('scroll', checkTabScroll)
         }
-        labelsScrollContainer.removeEventListener('scroll', checkLabelsScroll)
-        labelsScrollContainer.removeEventListener('wheel', handleWheel)
+        labelsScrollContainer.removeEventListener('scroll', handleScroll)
         if (rafId) cancelAnimationFrame(rafId)
         if (scrollCheckRafId) cancelAnimationFrame(scrollCheckRafId)
         window.removeEventListener('resize', handleResize)
@@ -208,12 +202,14 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
 
   const scrollLabels = (direction: 'left' | 'right') => {
     if (labelsScrollRef.current) {
-      const scrollAmount = 120
+      const scrollAmount = 200
       labelsScrollRef.current.scrollBy({
         left: direction === 'left' ? -scrollAmount : scrollAmount,
         behavior: 'smooth'
       })
-      setTimeout(checkLabelsScroll, 300)
+      // Check scroll state immediately and again after animation completes
+      checkLabelsScroll()
+      setTimeout(checkLabelsScroll, 350)
     }
   }
 
@@ -545,13 +541,6 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
       {/* Header */}
       <div className="sticky top-0 z-10 flex items-center justify-between p-6 border-b bg-white" style={{ borderColor: '#E5E5E5' }}>
         <div className="flex items-center gap-3">
-          <button
-            onClick={onShowEmpty}
-            className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none"
-            style={{ color: 'var(--gray)' }}>
-            <ArrowLeft className="h-5 w-5" />
-            <span className="sr-only">Back</span>
-          </button>
           <img src={chrome.runtime.getURL('assets/konta_logo.svg')} alt="Konta" className="w-8 h-8" />
           <h1 
             className="text-xl font"
@@ -756,7 +745,8 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
         </div>
 
         {/* Filters Section */}
-        <div className="bg-white px-2 pb-2">
+        {!searchQuery.trim() && (
+        <div className="sticky top-16 z-20 bg-white px-2 pb-2">
           <div className="flex items-center gap-1.5">
             {/* Left Scroll Arrow */}
             <button
@@ -792,37 +782,34 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
                     {label.name}
                   </button>
                 ))}
-
-                {/* Add Label Button - Icon Only */}
-                <button
-                  onClick={() => setShowAddLabelModal(true)}
-                  className="px-2.5 py-1.5 rounded-full text-xs font-medium transition-all flex items-center justify-center flex-shrink-0"
-                  style={{
-                    backgroundColor: '#F5F5F5',
-                    color: '#666',
-                    border: '1px dashed #CCC',
-                    fontFamily: "'Breeze Sans'",
-                    width: '28px',
-                    height: '28px',
-                  }}
-                  title="Add label">
-                  +
-                </button>
               </div>
             </div>
 
             {/* Right Scroll Arrow */}
             <button
               onClick={() => scrollLabels('right')}
-              disabled={!canScrollLabelsRight}
-              className="flex-shrink-0 p-1 transition-colors rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="flex-shrink-0 p-1 transition-colors rounded hover:bg-gray-100"
               style={{ color: '#9A9FA6' }}>
               <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
+
+            {/* Add Label Button - Icon Only */}
+            <button
+              onClick={() => setShowAddLabelModal(true)}
+              className="flex-shrink-0 p-2 transition-all rounded-lg hover:bg-blue-50 active:bg-blue-100"
+              style={{
+                color: '#0074FB',
+              }}
+              title="Add label">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
           </div>
         </div>
+        )}
             {/* dev: number of pages indexed */}
           {/* <div className="flex items-center justify-between px-1 text-xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
             <span>{pages.length} pages indexed</span>
@@ -836,17 +823,6 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
         {/* Search Results or Timeline */}
         {searchQuery.trim() ? (
           <div className="flex flex-col gap-2 p-2">
-            {results.length > 0 && (
-              <div className="flex items-center justify-end pb-1">
-                <button
-                  onClick={openAllResults}
-                  className="px-3 py-1 rounded-md text-xs font-medium transition-colors"
-                  style={{ backgroundColor: '#0074FB', color: 'white', fontFamily: "'Breeze Sans'" }}
-                >
-                  Open all ({Math.min(results.length, MAX_OPEN_TABS)}/{results.length})
-                </button>
-              </div>
-            )}
             {loading ? (
               <div className="flex flex-col items-center justify-center py-12 gap-4">
                 <div className="flex gap-1">
@@ -878,25 +854,37 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
             {results.map((item, idx) => {
               const { pageEvent, score, layer } = item
               const opened = pageEvent.openedAt || pageEvent.timestamp
-              const openedText = new Date(opened).toLocaleString()
+              const openedDate = new Date(opened)
+              const openedText = `${String(openedDate.getDate()).padStart(2, '0')}/${String(openedDate.getMonth() + 1).padStart(2, '0')}/${openedDate.getFullYear()} ${String(openedDate.getHours()).padStart(2, '0')}:${String(openedDate.getMinutes()).padStart(2, '0')}:${String(openedDate.getSeconds()).padStart(2, '0')}`
+              const faviconUrl = `https://www.google.com/s2/favicons?sz=16&domain=${new URL(pageEvent.url).hostname}`
               return (
                 <div
                   key={`${pageEvent.url}-${opened}-${idx}`}
-                  className="flex flex-col gap-1 p-2 rounded-lg"
+                  onClick={() => chrome.tabs.create({ url: pageEvent.url })}
+                  className="flex flex-col gap-1 p-2 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
                   style={{ backgroundColor: '#FAFAFA', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
                   <div className="flex items-center justify-between gap-2">
-                    <div className="text-sm font-semibold truncate" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
-                      {pageEvent.title || pageEvent.url}
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <img 
+                        src={faviconUrl} 
+                        alt="favicon" 
+                        className="w-4 h-4 flex-shrink-0"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none'
+                        }}
+                      />
+                      <div className="text-sm font-normal truncate" style={{ color: 'var(--dark)', fontFamily: "'Breeze Sans'" }}>
+                        {pageEvent.title || pageEvent.url}
+                      </div>
                     </div>
-                    <span className="text-2xs px-2 py-0.5 rounded" style={{ backgroundColor: '#E8E8E8', color: '#555', fontSize: '10px' }}>
-                      {layer} {score ? `• ${score.toFixed(3)}` : ""}
-                    </span>
                   </div>
-                  <div className="text-xs truncate" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'" }}>
-                    {pageEvent.url}
-                  </div>
-                  <div className="text-2xs" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
-                    Opened: {openedText}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-2xs truncate flex-1" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
+                      {pageEvent.url}
+                    </div>
+                    <div className="text-2xs flex-shrink-0" style={{ color: '#9A9FA6', fontFamily: "'Breeze Sans'", fontSize: '10px' }}>
+                      {openedText}
+                    </div>
                   </div>
                 </div>
               )
@@ -963,22 +951,22 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
       </div>
       {showAddLabelModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg p-6 w-80 shadow-lg">
-            <h2 className="text-lg font-semibold mb-4" style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
+          <div className="bg-white rounded-lg p-5 w-72 shadow-lg">
+            <h2 className="text-base font-normal mb-4" style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
               Create New Label
             </h2>
             
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3">
               <div>
-                <label className="text-xs font-medium" style={{ color: '#666', fontFamily: "'Breeze Sans'" }}>
+                <label className="text-xs font-normal" style={{ color: '#666', fontFamily: "'Breeze Sans'" }}>
                   Label Name
                 </label>
                 <input
                   type="text"
                   value={newLabelName}
                   onChange={(e) => setNewLabelName(e.target.value)}
-                  placeholder="e.g., Project X"
-                  className="w-full mt-2 px-3 py-2 border rounded-lg text-sm outline-none focus:border-blue-500"
+                  placeholder=""
+                  className="w-full mt-1 px-3 py-2 border rounded-lg text-sm outline-none focus:border-blue-500"
                   style={{ borderColor: '#DDD', fontFamily: "'Breeze Sans'" }}
                   onKeyPress={(e) => {
                     if (e.key === 'Enter') {
@@ -988,32 +976,27 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-medium" style={{ color: '#666', fontFamily: "'Breeze Sans'" }}>
-                  Color
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-normal" style={{ color: '#666', fontFamily: "'Breeze Sans'" }}>
+                  Colour
                 </label>
-                <div className="flex items-center gap-2 mt-2">
-                  <input
-                    type="color"
-                    value={newLabelColor}
-                    onChange={(e) => setNewLabelColor(e.target.value)}
-                    className="w-12 h-10 border rounded cursor-pointer"
-                    style={{ borderColor: '#DDD' }}
-                  />
-                  <span className="text-xs" style={{ color: '#666' }}>
-                    {newLabelColor}
-                  </span>
-                </div>
+                <input
+                  type="color"
+                  value={newLabelColor}
+                  onChange={(e) => setNewLabelColor(e.target.value)}
+                  className="w-10 h-10 border rounded cursor-pointer"
+                  style={{ borderColor: '#DDD' }}
+                />
               </div>
 
-              <div className="flex gap-2 justify-end">
+              <div className="flex gap-2 justify-end mt-2">
                 <button
                   onClick={() => {
                     setShowAddLabelModal(false)
                     setNewLabelName("")
                     setNewLabelColor("#3B82F6")
                   }}
-                  className="px-4 py-2 text-xs rounded-lg transition-colors"
+                  className="px-4 py-1.5 text-xs rounded-lg transition-colors"
                   style={{
                     backgroundColor: '#F5F5F5',
                     color: '#666',
@@ -1039,8 +1022,10 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
 
       {/* Settings Modal */}
       {showSettingsModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg p-6 w-96 shadow-lg max-h-[90vh] overflow-y-auto">
+        <>
+          <div className="fixed inset-0 bg-black bg-opacity-30 z-40 transition-opacity" onClick={() => setShowSettingsModal(false)} />
+          <div className="fixed right-0 top-0 bottom-0 z-50 bg-white w-full shadow-xl transition-transform duration-300 ease-in-out overflow-y-auto">
+            <div className="bg-white rounded-lg p-6 w-full h-full flex flex-col">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-semibold" style={{ color: '#080A0B', fontFamily: "'Breeze Sans'" }}>
                 Settings
@@ -1245,11 +1230,12 @@ export function PopulatedState({ onShowEmpty, initialTab }: PopulatedStateProps)
                   fontFamily: "'Breeze Sans'",
                   borderColor: '#0072df'
                 }}>
-                Save Changes
+                Close
               </button>
             </div>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   )
